@@ -1,4 +1,4 @@
-use palette::color_difference::EuclideanDistance;
+use palette::color_difference::{EuclideanDistance, Wcag21RelativeContrast};
 use palette::Srgba;
 
 #[derive(Copy, Clone)]
@@ -31,4 +31,21 @@ fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
     }
 
     best_color
+}
+
+fn range_relative_luminance(colors: &Vec<Color>) -> Vec<f32> {
+    let min_luma = colors.iter()
+        .map(|color| color.srgba.relative_luminance().luma)
+        .min_by(|a, b| a.partial_cmp(b).expect("Luminance was NaN"))
+        .unwrap_or(0.0);
+    let max_luma = colors.iter()
+        .map(|color| color.srgba.relative_luminance().luma)
+        .max_by(|a, b| a.partial_cmp(b).expect("Luminance was NaN"))
+        .unwrap_or(1.0);
+
+    let range = max_luma - min_luma;
+
+    colors.iter().map(|color| color.srgba.relative_luminance().luma)
+        .map(|luma| (luma - min_luma) / range)
+        .collect()
 }
