@@ -1,3 +1,6 @@
+use std::io::Cursor;
+use image::{DynamicImage, ImageResult};
+use image::io::Reader;
 use palette::color_difference::{EuclideanDistance, Wcag21RelativeContrast};
 use palette::Srgba;
 
@@ -18,6 +21,21 @@ impl Default for Color {
     fn default() -> Self {
         Color { id: 0, srgba: Srgba::new(0.0, 0.0, 0.0, 0.0) }
     }
+}
+
+fn decode_image_from_path(path: &str) -> ImageResult<DynamicImage> {
+    Reader::open(path)?.decode()
+}
+
+fn decode_image_from_bytes(raw_data: &str) -> ImageResult<DynamicImage> {
+    Reader::new(Cursor::new(raw_data))
+        .with_guessed_format()
+        .expect("Cursor IO never fails")
+        .decode()
+}
+
+fn change_palette(original_colors: Vec<Srgba>, palette: &Vec<Color>) -> Vec<Color> {
+    original_colors.into_iter().map(|color| find_similar_color(color, palette)).collect()
 }
 
 fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
