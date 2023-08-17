@@ -15,6 +15,9 @@ impl Default for Color {
 
 fn main() {
     println!("Hello, world!");
+    let test: Srgba = Srgba::new(0.5, 0.5, 0.5, 0.5);
+    let test2: Srgba = Srgba::new(0.1, 0.1, 0.1, 0.0);
+    println!("{}", distance_squared(test, test2));
 }
 
 fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
@@ -22,7 +25,7 @@ fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
     let mut best_color = Color::default();
 
     for palette_color in palette {
-        let distance = color.distance_squared(*palette_color.srgba);
+        let distance = distance_squared(color, palette_color.srgba);
 
         if distance < best_distance {
             best_distance = distance;
@@ -31,6 +34,12 @@ fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
     }
 
     best_color
+}
+
+fn distance_squared(color1: Srgba, color2: Srgba) -> f32 {
+    let alpha_distance = color1.alpha - color2.alpha;
+    let alpha_distance_squared = alpha_distance * alpha_distance;
+    color1.distance_squared(*color2) + alpha_distance_squared
 }
 
 fn range_relative_luminance(colors: &Vec<Color>) -> Vec<f32> {
