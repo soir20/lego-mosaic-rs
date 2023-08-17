@@ -1,5 +1,6 @@
 use std::io::Cursor;
-use image::{DynamicImage, ImageResult};
+use std::vec::IntoIter;
+use image::{DynamicImage, GenericImageView, ImageResult, Pixel};
 use image::io::Reader;
 use palette::color_difference::{EuclideanDistance, Wcag21RelativeContrast};
 use palette::Srgba;
@@ -20,6 +21,48 @@ struct Color {
 impl Default for Color {
     fn default() -> Self {
         Color { id: 0, srgba: Srgba::new(0.0, 0.0, 0.0, 0.0) }
+    }
+}
+
+struct ImageColors {
+    colors: Vec<Srgba>,
+    height: u32
+}
+
+impl ImageColors {
+    fn color(&self, x: u32, y: u32) -> Srgba {
+        self.colors[y * self.height + x]
+    }
+}
+
+impl IntoIterator for ImageColors {
+    type Item = Srgba;
+    type IntoIter = IntoIter<Srgba>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.colors.into_iter()
+    }
+}
+
+impl From<DynamicImage> for ImageColors {
+    fn from(image: DynamicImage) -> Self {
+        let width = image.width();
+        let height = image.height();
+        let mut colors = Vec::with_capacity((width * height) as usize);
+
+        for x in 0..width {
+            for y in 0..height {
+                let channels = image.get_pixel(x, y).to_rgba().channels();
+                let red = channels[0] / 255.0;
+                let green = channels[1] / 255.0;
+                let blue = channels[2] / 255.0;
+                let alpha = channels[3] / 255.0;
+
+                colors.push(Srgba::new(red, green, blue, alpha));
+            }
+        }
+
+        ImageColors { colors, height }
     }
 }
 
