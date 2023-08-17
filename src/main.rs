@@ -1,6 +1,13 @@
 use palette::color_difference::{EuclideanDistance, Wcag21RelativeContrast};
 use palette::Srgba;
 
+fn main() {
+    println!("Hello, world!");
+    let test: Srgba = Srgba::new(0.5, 0.5, 0.5, 0.5);
+    let test2: Srgba = Srgba::new(0.1, 0.1, 0.1, 0.0);
+    println!("{}", distance_squared(test, test2));
+}
+
 #[derive(Copy, Clone)]
 struct Color {
     id: u8,
@@ -11,13 +18,6 @@ impl Default for Color {
     fn default() -> Self {
         Color { id: 0, srgba: Srgba::new(0.0, 0.0, 0.0, 0.0) }
     }
-}
-
-fn main() {
-    println!("Hello, world!");
-    let test: Srgba = Srgba::new(0.5, 0.5, 0.5, 0.5);
-    let test2: Srgba = Srgba::new(0.1, 0.1, 0.1, 0.0);
-    println!("{}", distance_squared(test, test2));
 }
 
 fn find_similar_color(color: Srgba, palette: &Vec<Color>) -> Color {
