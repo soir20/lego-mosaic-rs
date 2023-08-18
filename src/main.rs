@@ -1,5 +1,4 @@
 use std::io::Cursor;
-use std::vec::IntoIter;
 use image::{DynamicImage, GenericImageView, ImageResult, Pixel};
 use image::io::Reader;
 use palette::color_difference::Wcag21RelativeContrast;
@@ -7,9 +6,6 @@ use palette::Srgba;
 
 fn main() {
     println!("Hello, world!");
-    let test = Srgba::<u8>::new(127, 127, 127, 127);
-    let test2 = Srgba::<u8>::new(25, 25, 25, 0);
-    println!("{}", distance_squared(test, test2));
 }
 
 #[derive(Copy, Clone)]
@@ -24,27 +20,18 @@ impl Default for Color {
     }
 }
 
-struct ImageColors {
-    colors: Vec<Srgba<u8>>,
+struct ImageColors<T> {
+    colors: Vec<T>,
     height: u32
 }
 
-impl ImageColors {
-    fn color(&self, x: u32, y: u32) -> Srgba<u8> {
+impl<T: Copy> ImageColors<T> {
+    fn color(&self, x: u32, y: u32) -> T {
         self.colors[(y * self.height + x) as usize]
     }
 }
 
-impl IntoIterator for ImageColors {
-    type Item = Srgba<u8>;
-    type IntoIter = IntoIter<Srgba<u8>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.colors.into_iter()
-    }
-}
-
-impl From<DynamicImage> for ImageColors {
+impl From<DynamicImage> for ImageColors<Srgba<u8>> {
     fn from(image: DynamicImage) -> Self {
         let width = image.width();
         let height = image.height();
@@ -67,6 +54,47 @@ impl From<DynamicImage> for ImageColors {
     }
 }
 
+impl ImageColors<Srgba<u8>> {
+    pub fn with_palette(self, palette: &[Color]) -> ImageColors<Color> {
+        let new_colors = self.colors.into_iter()
+            .map(|color| Self::find_similar_color(color, palette))
+            .collect();
+        ImageColors { colors: new_colors, height: self.height}
+    }
+
+    fn find_similar_color(color: Srgba<u8>, palette: &[Color]) -> Color {
+        let mut best_distance = u32::MAX;
+        let mut best_color = Color::default();
+
+        for palette_color in palette {
+            let distance = Self::distance_squared(color, palette_color.srgba);
+
+            if distance < best_distance {
+                best_distance = distance;
+                best_color = *palette_color;
+            }
+        }
+
+        best_color
+    }
+
+    fn distance_squared(color1: Srgba<u8>, color2: Srgba<u8>) -> u32 {
+
+        // u8 squared -> u16 needed, u16 x 4 -> u32 needed
+        // Ex: 255^2 * 4 = 260100
+        Self::component_distance_squared(color1.red, color2.red)
+            + Self::component_distance_squared(color1.green, color2.green)
+            + Self::component_distance_squared(color1.blue, color2.blue)
+            + Self::component_distance_squared(color1.alpha, color2.alpha)
+
+    }
+
+    fn component_distance_squared(component1: u8, component2: u8) -> u32 {
+        let distance = component1.abs_diff(component2) as u32;
+        distance * distance
+    }
+}
+
 fn decode_image_from_path(path: &str) -> ImageResult<DynamicImage> {
     Reader::open(path)?.decode()
 }
@@ -76,42 +104,6 @@ fn decode_image_from_bytes(raw_data: &str) -> ImageResult<DynamicImage> {
         .with_guessed_format()
         .expect("Cursor IO never fails")
         .decode()
-}
-
-fn change_palette(original_colors: Vec<Srgba<u8>>, palette: &Vec<Color>) -> Vec<Color> {
-    original_colors.into_iter().map(|color| find_similar_color(color, palette)).collect()
-}
-
-fn find_similar_color(color: Srgba<u8>, palette: &Vec<Color>) -> Color {
-    let mut best_distance = u32::MAX;
-    let mut best_color = Color::default();
-
-    for palette_color in palette {
-        let distance = distance_squared(color, palette_color.srgba);
-
-        if distance < best_distance {
-            best_distance = distance;
-            best_color = *palette_color;
-        }
-    }
-
-    best_color
-}
-
-fn distance_squared(color1: Srgba<u8>, color2: Srgba<u8>) -> u32 {
-
-    // u8 squared -> u16 needed, u16 x 4 -> u32 needed
-    // Ex: 255^2 * 4 = 260100
-    component_distance_squared(color1.red, color2.red)
-        + component_distance_squared(color1.green, color2.green)
-        + component_distance_squared(color1.blue, color2.blue)
-        + component_distance_squared(color1.alpha, color2.alpha)
-
-}
-
-fn component_distance_squared(component1: u8, component2: u8) -> u32 {
-    let distance = component1.abs_diff(component2) as u32;
-    distance * distance
 }
 
 fn range_relative_luminance(colors: &[Color]) -> Vec<f32> {
