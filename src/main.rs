@@ -113,10 +113,10 @@ impl Pixels<Color> {
                 srgba_f32.relative_luminance().luma
             })
             .map(|luma| (luma - min_luma) / range)
-            .map(|luma| if flip { 1.0 - luma } else { luma })
+            .map(|range_rel_luma| if flip { 1.0 - range_rel_luma } else { range_rel_luma })
             /* Layers must be u16 because the max integer a 32-bit float can represent exactly
                is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-            .map(|range_rel_luminance| (range_rel_luminance * layers as f32).round() as u16)
+            .map(|range_rel_luma| (range_rel_luma * layers as f32).round() as u16)
             .collect();
 
         BumpMap { values_by_row: layers_by_row, height: self.height }
