@@ -20,18 +20,18 @@ impl Default for Color {
     }
 }
 
-struct ImageColors<T> {
-    colors: Vec<T>,
+struct Pixels<T> {
+    values_by_row: Vec<T>,
     height: u32
 }
 
-impl<T: Copy> ImageColors<T> {
-    fn color(&self, x: u32, y: u32) -> T {
-        self.colors[(y * self.height + x) as usize]
+impl<T: Copy> Pixels<T> {
+    fn value(&self, x: u32, y: u32) -> T {
+        self.values_by_row[(y * self.height + x) as usize]
     }
 }
 
-impl From<DynamicImage> for ImageColors<Srgba<u8>> {
+impl From<DynamicImage> for Pixels<Srgba<u8>> {
     fn from(image: DynamicImage) -> Self {
         let width = image.width();
         let height = image.height();
@@ -50,16 +50,16 @@ impl From<DynamicImage> for ImageColors<Srgba<u8>> {
             }
         }
 
-        ImageColors { colors, height }
+        Pixels { values_by_row: colors, height }
     }
 }
 
-impl ImageColors<Srgba<u8>> {
-    pub fn with_palette(self, palette: &[Color]) -> ImageColors<Color> {
-        let new_colors = self.colors.into_iter()
+impl Pixels<Srgba<u8>> {
+    pub fn with_palette(self, palette: &[Color]) -> Pixels<Color> {
+        let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
-        ImageColors { colors: new_colors, height: self.height}
+        Pixels { values_by_row: new_colors, height: self.height}
     }
 
     fn find_similar_color(color: Srgba<u8>, palette: &[Color]) -> Color {
@@ -95,6 +95,33 @@ impl ImageColors<Srgba<u8>> {
     }
 }
 
+type BumpMap = Pixels<u16>;
+impl Pixels<Color> {
+    pub fn bump_map(&self, layers: u16) -> BumpMap {
+        let (min_luma, max_luma) = self.values_by_row.iter()
+            .map(|color| {
+                let srgba_f32: Srgba<f32> = color.srgba.into_format();
+                srgba_f32.relative_luminance().luma
+            })
+            .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
+
+        let range = max_luma - min_luma;
+
+        let layers_by_row = self.values_by_row.iter()
+            .map(|color| {
+                let srgba_f32: Srgba<f32> = color.srgba.into_format();
+                srgba_f32.relative_luminance().luma
+            })
+            .map(|luma| (luma - min_luma) / range)
+            /* Layers must be u16 because the max integer a 32-bit float can represent exactly
+               is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
+            .map(|range_rel_luminance| (range_rel_luminance * layers as f32).round() as u16)
+            .collect();
+
+        BumpMap { values_by_row: layers_by_row, height: self.height }
+    }
+}
+
 fn decode_image_from_path(path: &str) -> ImageResult<DynamicImage> {
     Reader::open(path)?.decode()
 }
@@ -104,23 +131,4 @@ fn decode_image_from_bytes(raw_data: &str) -> ImageResult<DynamicImage> {
         .with_guessed_format()
         .expect("Cursor IO never fails")
         .decode()
-}
-
-fn range_relative_luminance(colors: &[Color]) -> Vec<f32> {
-    let (min_luma, max_luma) = colors.iter()
-        .map(|color| {
-            let srgba_f32: Srgba<f32> = color.srgba.into_format();
-            srgba_f32.relative_luminance().luma
-        })
-        .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
-
-    let range = max_luma - min_luma;
-
-    colors.iter()
-        .map(|color| {
-            let srgba_f32: Srgba<f32> = color.srgba.into_format();
-            srgba_f32.relative_luminance().luma
-        })
-        .map(|luma| (luma - min_luma) / range)
-        .collect()
 }
