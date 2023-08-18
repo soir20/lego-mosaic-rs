@@ -97,7 +97,7 @@ impl Pixels<Srgba<u8>> {
 
 type BumpMap = Pixels<u16>;
 impl Pixels<Color> {
-    pub fn bump_map(&self, layers: u16) -> BumpMap {
+    pub fn bump_map(&self, layers: u16, flip: bool) -> BumpMap {
         let (min_luma, max_luma) = self.values_by_row.iter()
             .map(|color| {
                 let srgba_f32: Srgba<f32> = color.srgba.into_format();
@@ -113,6 +113,7 @@ impl Pixels<Color> {
                 srgba_f32.relative_luminance().luma
             })
             .map(|luma| (luma - min_luma) / range)
+            .map(|luma| if flip { 1.0 - luma } else { luma })
             /* Layers must be u16 because the max integer a 32-bit float can represent exactly
                is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
             .map(|range_rel_luminance| (range_rel_luminance * layers as f32).round() as u16)
