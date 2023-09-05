@@ -98,6 +98,10 @@ impl Pixels<Srgba<u8>> {
 type BumpMap = Pixels<u16>;
 impl Pixels<Color> {
     pub fn bump_map(&self, layers: u16, flip: bool) -> BumpMap {
+        if layers == 0 {
+            return BumpMap { values_by_row: Vec::new(), height: 0 }
+        }
+
         let (min_luma, max_luma) = self.values_by_row.iter()
             .map(|color| {
                 let srgba_f32: Srgba<f32> = color.srgba.into_format();
@@ -106,6 +110,7 @@ impl Pixels<Color> {
             .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
 
         let range = max_luma - min_luma;
+        let max_layer_index = layers - 1;
 
         let layers_by_row = self.values_by_row.iter()
             .map(|color| {
@@ -116,7 +121,7 @@ impl Pixels<Color> {
             .map(|range_rel_luma| if flip { 1.0 - range_rel_luma } else { range_rel_luma })
             /* Layers must be u16 because the max integer a 32-bit float can represent exactly
                is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-            .map(|range_rel_luma| (range_rel_luma * layers as f32).round() as u16)
+            .map(|range_rel_luma| (range_rel_luma * max_layer_index as f32).round() as u16)
             .collect();
 
         BumpMap { values_by_row: layers_by_row, height: self.height }
