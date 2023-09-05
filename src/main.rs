@@ -1,11 +1,46 @@
 use std::io::Cursor;
-use image::{DynamicImage, GenericImageView, ImageResult, Pixel};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageResult, Pixel, Rgba};
+use image::imageops::FilterType;
 use image::io::Reader;
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
 fn main() {
-    println!("Hello, world!");
+    let input_path = "nyc.jpg";
+    let output_width = 512;
+    let output_height = 512;
+    let resize_filter = FilterType::CatmullRom;
+    let palette = vec![
+        Color { id: 0, srgba: Srgba::new(255, 0, 0, 255) },
+        Color { id: 0, srgba: Srgba::new(0, 255, 0, 255) },
+        Color { id: 0, srgba: Srgba::new(0, 0, 255, 255) }
+    ];
+    let layers = 5;
+
+    let image = match decode_image_from_path(input_path) {
+        Ok(img) => img,
+        Err(err) => panic!("{}", err)
+    };
+    let resized_image = image.resize(output_width, output_height, resize_filter);
+    let raw_pixels: Pixels<Srgba<u8>> = resized_image.into();
+    let palette_pixels = raw_pixels.with_palette(&palette[..]);
+
+    let mut dest = ImageBuffer::new(output_width, output_height);
+
+    for x in 0..output_width {
+        for y in 0..output_height {
+            let color = palette_pixels.value(x, y).srgba;
+            let red = color.red;
+            let green = color.green;
+            let blue = color.blue;
+            let alpha = color.alpha;
+
+            println!("{:?}", color);
+            dest.put_pixel(x, y, Rgba::from([red, green, blue, alpha]));
+        }
+    }
+
+    dest.save("hello-world2.png").expect("Unable to save image");
 }
 
 #[derive(Copy, Clone)]
