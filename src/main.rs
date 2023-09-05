@@ -72,8 +72,8 @@ impl From<DynamicImage> for Pixels<Srgba<u8>> {
         let height = image.height();
         let mut colors = Vec::with_capacity((width * height) as usize);
 
-        for x in 0..width {
-            for y in 0..height {
+        for y in 0..height {
+            for x in 0..width {
                 let color = image.get_pixel(x, y).to_rgba();
                 let channels = color.channels();
                 let red = channels[0];
