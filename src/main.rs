@@ -1,21 +1,30 @@
 use std::io::Cursor;
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageResult, Pixel, Rgba};
+use image::{DynamicImage, GenericImageView, ImageBuffer, ImageResult, Pixel, Rgba};
 use image::imageops::FilterType;
 use image::io::Reader;
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
 fn main() {
-    let input_path = "nyc.jpg";
-    let output_width = 512;
-    let output_height = 512;
+    let input_path = "dragon.webp";
+    let output_width = 640;
+    let output_height = 800;
     let resize_filter = FilterType::CatmullRom;
+    /*let palette = vec![
+        Color { id: 0, srgba: Srgba::new(224, 136, 134, 255) },
+        Color { id: 0, srgba: Srgba::new(28, 20, 44, 255) },
+        Color { id: 0, srgba: Srgba::new(78, 182, 181, 255) },
+        Color { id: 0, srgba: Srgba::new(116, 43, 73, 255) },
+        Color { id: 0, srgba: Srgba::new(57, 107, 168, 255) }
+    ];*/
     let palette = vec![
-        Color { id: 0, srgba: Srgba::new(255, 0, 0, 255) },
-        Color { id: 0, srgba: Srgba::new(0, 255, 0, 255) },
-        Color { id: 0, srgba: Srgba::new(0, 0, 255, 255) }
+        Color { id: 0, srgba: Srgba::new(136, 55, 70, 255) },
+        Color { id: 0, srgba: Srgba::new(231, 109, 88, 255) },
+        Color { id: 0, srgba: Srgba::new(20, 159, 178, 255) },
+        Color { id: 0, srgba: Srgba::new(30, 126, 142, 255) },
+        Color { id: 0, srgba: Srgba::new(36, 174, 187, 255) }
     ];
-    let layers = 5;
+    let layers = 256;
 
     let image = match decode_image_from_path(input_path) {
         Ok(img) => img,
@@ -24,23 +33,23 @@ fn main() {
     let resized_image = image.resize(output_width, output_height, resize_filter);
     let raw_pixels: Pixels<Srgba<u8>> = resized_image.into();
     let palette_pixels = raw_pixels.with_palette(&palette[..]);
+    let height_pixels = palette_pixels.bump_map(layers, false);
 
     let mut dest = ImageBuffer::new(output_width, output_height);
 
     for x in 0..output_width {
         for y in 0..output_height {
-            let color = palette_pixels.value(x, y).srgba;
+            let color = raw_pixels.value(x, y);
             let red = color.red;
             let green = color.green;
             let blue = color.blue;
             let alpha = color.alpha;
 
-            println!("{:?}", color);
             dest.put_pixel(x, y, Rgba::from([red, green, blue, alpha]));
         }
     }
 
-    dest.save("hello-world2.png").expect("Unable to save image");
+    dest.save("dragon.png").expect("Unable to save image");
 }
 
 #[derive(Copy, Clone)]
@@ -57,12 +66,12 @@ impl Default for Color {
 
 struct Pixels<T> {
     values_by_row: Vec<T>,
-    height: u32
+    width: u32
 }
 
 impl<T: Copy> Pixels<T> {
     fn value(&self, x: u32, y: u32) -> T {
-        self.values_by_row[(y * self.height + x) as usize]
+        self.values_by_row[(y * self.width + x) as usize]
     }
 }
 
@@ -85,7 +94,7 @@ impl From<DynamicImage> for Pixels<Srgba<u8>> {
             }
         }
 
-        Pixels { values_by_row: colors, height }
+        Pixels { values_by_row: colors, width }
     }
 }
 
@@ -94,7 +103,7 @@ impl Pixels<Srgba<u8>> {
         let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
-        Pixels { values_by_row: new_colors, height: self.height}
+        Pixels { values_by_row: new_colors, width: self.width }
     }
 
     fn find_similar_color(color: Srgba<u8>, palette: &[Color]) -> Color {
@@ -134,7 +143,7 @@ type BumpMap = Pixels<u16>;
 impl Pixels<Color> {
     pub fn bump_map(&self, layers: u16, flip: bool) -> BumpMap {
         if layers == 0 {
-            return BumpMap { values_by_row: Vec::new(), height: 0 }
+            return BumpMap { values_by_row: Vec::new(), width: 0 }
         }
 
         let (min_luma, max_luma) = self.values_by_row.iter()
@@ -159,7 +168,7 @@ impl Pixels<Color> {
             .map(|range_rel_luma| (range_rel_luma * max_layer_index as f32).round() as u16)
             .collect();
 
-        BumpMap { values_by_row: layers_by_row, height: self.height }
+        BumpMap { values_by_row: layers_by_row, width: self.width }
     }
 }
 
