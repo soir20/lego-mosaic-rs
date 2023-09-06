@@ -30,7 +30,7 @@ fn main() {
         Ok(img) => img,
         Err(err) => panic!("{}", err)
     };
-    let resized_image = image.resize(output_width, output_height, resize_filter);
+    let resized_image = image.resize_exact(output_width, output_height, resize_filter);
     let raw_pixels: Pixels<Srgba<u8>> = resized_image.into();
     let palette_pixels = raw_pixels.with_palette(&palette[..]);
     let height_pixels = palette_pixels.bump_map(layers, false);
@@ -39,7 +39,7 @@ fn main() {
 
     for x in 0..output_width {
         for y in 0..output_height {
-            let color = raw_pixels.value(x, y);
+            let color = palette_pixels.value(x, y).srgba;
             let red = color.red;
             let green = color.green;
             let blue = color.blue;
