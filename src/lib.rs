@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
@@ -18,14 +19,14 @@ impl SinglePieceFlatMosaic {
     }
 
     pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic {
-        let bump_map = self.colors.bump_map(layers, darker_areas_taller);
-        SinglePiece3dMosaic { colors: self.colors, bump_map }
+        let height_map = self.colors.height_map(layers, darker_areas_taller);
+        SinglePiece3dMosaic { colors: self.colors, height_map }
     }
 }
 
 pub struct SinglePiece3dMosaic {
     colors: Pixels<Color>,
-    bump_map: Pixels<u16>
+    height_map: HeightMap
 }
 
 impl SinglePiece3dMosaic {
@@ -35,7 +36,7 @@ impl SinglePiece3dMosaic {
     }
 
     pub fn height(&self, x: u32, y: u32) -> u16 {
-        self.bump_map.value(x, y)
+        *self.height_map.get(&color_as_key(self.color(x, y))).unwrap_or(&1)
     }
 
 }
@@ -115,11 +116,11 @@ impl Pixels<Srgba<u8>> {
     }
 }
 
-type BumpMap = Pixels<u16>;
+type HeightMap = HashMap<u64, u16>;
 impl Pixels<Color> {
-    pub fn bump_map(&self, layers: u16, flip: bool) -> BumpMap {
+    pub fn height_map(&self, layers: u16, flip: bool) -> HeightMap {
         if layers == 0 {
-            return BumpMap { values_by_row: Vec::new(), width: 0 }
+            return HeightMap::new();
         }
 
         let (min_luma, max_luma) = self.values_by_row.iter()
@@ -132,18 +133,32 @@ impl Pixels<Color> {
         let range = max_luma - min_luma;
         let max_layer_index = layers - 1;
 
-        let heights_by_row = self.values_by_row.iter()
-            .map(|color| {
-                let srgba_f32: Srgba<f32> = color.into_format();
-                srgba_f32.relative_luminance().luma
-            })
-            .map(|luma| (luma - min_luma) / range)
-            .map(|range_rel_luma| if flip { 1.0 - range_rel_luma } else { range_rel_luma })
-            /* Layers must be u16 because the max integer a 32-bit float can represent exactly
-               is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-            .map(|range_rel_luma| (range_rel_luma * max_layer_index as f32).round() as u16 + 1)
-            .collect();
+        let mut height_map = HeightMap::new();
 
-        BumpMap { values_by_row: heights_by_row, width: self.width }
+        self.values_by_row.iter().for_each(|color| {
+            let entry = height_map.entry(color_as_key(*color));
+            entry.or_insert_with(|| {
+                let srgba_f32: Srgba<f32> = color.into_format();
+                let luma = srgba_f32.relative_luminance().luma;
+                let mut range_rel_luma = (luma - min_luma) / range;
+                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
+
+                /* Layers must be u16 because the max integer a 32-bit float can represent
+                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
+                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
+
+            });
+        });
+
+        height_map
     }
+}
+
+fn color_as_key(color: Color) -> u64 {
+    let mut key = 0u64;
+    key |= (color.red as u64) << 48;
+    key |= (color.green as u64) << 32;
+    key |= (color.blue as u64) << 16;
+    key |= color.alpha as u64;
+    key
 }
