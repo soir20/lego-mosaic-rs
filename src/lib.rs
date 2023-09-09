@@ -1,67 +1,43 @@
-use std::io::Cursor;
-use image::{DynamicImage, GenericImageView, ImageBuffer, ImageResult, Pixel, Rgba};
-use image::imageops::FilterType;
-use image::io::Reader;
+use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
-fn main() {
-    let input_path = "dragon.webp";
-    let output_width = 640;
-    let output_height = 800;
-    let resize_filter = FilterType::CatmullRom;
-    /*let palette = vec![
-        Color { id: 0, srgba: Srgba::new(224, 136, 134, 255) },
-        Color { id: 0, srgba: Srgba::new(28, 20, 44, 255) },
-        Color { id: 0, srgba: Srgba::new(78, 182, 181, 255) },
-        Color { id: 0, srgba: Srgba::new(116, 43, 73, 255) },
-        Color { id: 0, srgba: Srgba::new(57, 107, 168, 255) }
-    ];*/
-    let palette = vec![
-        Color { id: 0, srgba: Srgba::new(136, 55, 70, 255) },
-        Color { id: 0, srgba: Srgba::new(231, 109, 88, 255) },
-        Color { id: 0, srgba: Srgba::new(20, 159, 178, 255) },
-        Color { id: 0, srgba: Srgba::new(30, 126, 142, 255) },
-        Color { id: 0, srgba: Srgba::new(36, 174, 187, 255) }
-    ];
-    let layers = 256;
-
-    let image = match decode_image_from_path(input_path) {
-        Ok(img) => img,
-        Err(err) => panic!("{}", err)
-    };
-    let resized_image = image.resize_exact(output_width, output_height, resize_filter);
-    let raw_pixels: Pixels<Srgba<u8>> = resized_image.into();
-    let palette_pixels = raw_pixels.with_palette(&palette[..]);
-    let height_pixels = palette_pixels.bump_map(layers, false);
-
-    let mut dest = ImageBuffer::new(output_width, output_height);
-
-    for x in 0..output_width {
-        for y in 0..output_height {
-            let color = palette_pixels.value(x, y).srgba;
-            let red = color.red;
-            let green = color.green;
-            let blue = color.blue;
-            let alpha = color.alpha;
-
-            dest.put_pixel(x, y, Rgba::from([red, green, blue, alpha]));
-        }
-    }
-
-    dest.save("dragon.png").expect("Unable to save image");
+pub type Color = Srgba<u8>;
+pub struct SinglePieceFlatMosaic {
+    colors: Pixels<Color>
 }
 
-#[derive(Copy, Clone)]
-struct Color {
-    id: u8,
-    srgba: Srgba<u8>
+impl SinglePieceFlatMosaic {
+    pub fn from_image(image: DynamicImage, palette: &[Color]) -> SinglePieceFlatMosaic {
+        let raw_pixels: Pixels<Color> = image.into();
+        SinglePieceFlatMosaic { colors: raw_pixels.with_palette(palette) }
+    }
+
+    pub fn color(&self, x: u32, y: u32) -> Color {
+        self.colors.value(x, y)
+    }
+
+    pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic {
+        let bump_map = self.colors.bump_map(layers, darker_areas_taller);
+        SinglePiece3dMosaic { colors: self.colors, bump_map }
+    }
 }
 
-impl Default for Color {
-    fn default() -> Self {
-        Color { id: 0, srgba: Srgba::new(0, 0, 0, 0) }
+pub struct SinglePiece3dMosaic {
+    colors: Pixels<Color>,
+    bump_map: Pixels<u16>
+}
+
+impl SinglePiece3dMosaic {
+
+    pub fn color(&self, x: u32, y: u32) -> Color {
+        self.colors.value(x, y)
     }
+
+    pub fn height(&self, x: u32, y: u32) -> u16 {
+        self.bump_map.value(x, y)
+    }
+
 }
 
 struct Pixels<T> {
@@ -110,12 +86,12 @@ impl Pixels<Srgba<u8>> {
         let mut best_distance = u32::MAX;
         let mut best_color = Color::default();
 
-        for palette_color in palette {
-            let distance = Self::distance_squared(color, palette_color.srgba);
+        for &palette_color in palette {
+            let distance = Self::distance_squared(color, palette_color);
 
             if distance < best_distance {
                 best_distance = distance;
-                best_color = *palette_color;
+                best_color = palette_color;
             }
         }
 
@@ -148,7 +124,7 @@ impl Pixels<Color> {
 
         let (min_luma, max_luma) = self.values_by_row.iter()
             .map(|color| {
-                let srgba_f32: Srgba<f32> = color.srgba.into_format();
+                let srgba_f32: Srgba<f32> = color.into_format();
                 srgba_f32.relative_luminance().luma
             })
             .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
@@ -156,29 +132,18 @@ impl Pixels<Color> {
         let range = max_luma - min_luma;
         let max_layer_index = layers - 1;
 
-        let layers_by_row = self.values_by_row.iter()
+        let heights_by_row = self.values_by_row.iter()
             .map(|color| {
-                let srgba_f32: Srgba<f32> = color.srgba.into_format();
+                let srgba_f32: Srgba<f32> = color.into_format();
                 srgba_f32.relative_luminance().luma
             })
             .map(|luma| (luma - min_luma) / range)
             .map(|range_rel_luma| if flip { 1.0 - range_rel_luma } else { range_rel_luma })
             /* Layers must be u16 because the max integer a 32-bit float can represent exactly
                is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-            .map(|range_rel_luma| (range_rel_luma * max_layer_index as f32).round() as u16)
+            .map(|range_rel_luma| (range_rel_luma * max_layer_index as f32).round() as u16 + 1)
             .collect();
 
-        BumpMap { values_by_row: layers_by_row, width: self.width }
+        BumpMap { values_by_row: heights_by_row, width: self.width }
     }
-}
-
-fn decode_image_from_path(path: &str) -> ImageResult<DynamicImage> {
-    Reader::open(path)?.decode()
-}
-
-fn decode_image_from_bytes(raw_data: &str) -> ImageResult<DynamicImage> {
-    Reader::new(Cursor::new(raw_data))
-        .with_guessed_format()
-        .expect("Cursor IO never fails")
-        .decode()
 }
