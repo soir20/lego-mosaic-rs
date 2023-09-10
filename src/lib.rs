@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use boolvec::BoolVec;
 use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
@@ -14,7 +15,7 @@ impl SinglePieceFlatMosaic {
         SinglePieceFlatMosaic { colors: raw_pixels.with_palette(palette) }
     }
 
-    pub fn color(&self, x: u32, y: u32) -> Color {
+    pub fn color(&self, x: usize, y: usize) -> Color {
         self.colors.value(x, y)
     }
 
@@ -32,7 +33,7 @@ pub struct SinglePiece3dMosaic {
 impl SinglePiece3dMosaic {
 
     pub fn color(&self, x: u32, y: u32) -> Color {
-        self.colors.value(x, y)
+        self.colors.value(x as usize, y as usize)
     }
 
     pub fn height(&self, x: u32, y: u32) -> u16 {
@@ -41,26 +42,136 @@ impl SinglePiece3dMosaic {
 
 }
 
+pub struct Chunk {
+    id: u32,
+    color: Color,
+    x: u32,
+    y: u32,
+    width: u32,
+    length: u32,
+    height: u32,
+    excluded_xs: Vec<BTreeSet<u32>>,
+    excluded_ys: Vec<BTreeSet<u32>>
+}
+
+pub struct MultiPieceMosaic {
+    chunks: Vec<Chunk>
+}
+
+impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
+    fn from(value: SinglePieceFlatMosaic) -> Self {
+        let area = value.colors.values_by_row.len();
+        let width = value.colors.width;
+        let height = area / width;
+
+        let mut visited = BoolVec::with_capacity(area);
+        let mut queue = VecDeque::new();
+        let mut chunk_pos = HashSet::new();
+
+        let mut chunks = Vec::new();
+
+        for start_y in 0..height {
+            for start_x in 0..width {
+                if was_visited(&mut visited, start_x, start_y, width) {
+                    continue;
+                }
+
+                let start_color = value.color(start_x, start_y);
+                queue.push_back((start_x, start_y));
+
+                let mut min_x = start_x;
+                let mut min_y = start_y;
+                let mut max_x = start_x;
+                let mut max_y = start_y;
+
+                while !queue.is_empty() {
+                    let (x, y) = queue.pop_back().unwrap();
+                    visited.set(y * width + x, true);
+                    chunk_pos.insert((x, y));
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = min_y.max(y);
+
+                    if x > 0 && is_new_pos(&visited, &value, x - 1, y, width, start_color) {
+                        queue.push_back((x - 1, y));
+                    }
+
+                    if x < width - 1 && is_new_pos(&visited, &value, x + 1, y, width, start_color) {
+                        queue.push_back((x + 1, y));
+                    }
+
+                    if y > 0 && is_new_pos(&visited, &value, x, y - 1, width, start_color) {
+                        queue.push_back((x, y - 1));
+                    }
+
+                    if y < height - 1 && is_new_pos(&visited, &value, x, y + 1, width, start_color) {
+                        queue.push_back((x, y + 1));
+                    }
+                }
+
+                let chunk_width = max_x - min_x + 1;
+                let chunk_height = max_y - min_y + 1;
+
+                let mut excluded_xs = vec![BTreeSet::new(); chunk_height];
+                let mut excluded_ys = vec![BTreeSet::new(); chunk_width];
+
+                for y in min_y..=max_y {
+                    for x in min_x..=max_x {
+                        if !chunk_pos.contains(&(x, y)) {
+                            excluded_xs[y].insert(x as u32);
+                            excluded_ys[x].insert(y as u32);
+                        }
+                    }
+                }
+
+                chunks.push(Chunk {
+                    id: 0,
+                    color: start_color,
+                    x: min_x as u32,
+                    y: min_y as u32,
+                    width: chunk_width as u32,
+                    length: chunk_height as u32,
+                    height: 1,
+                    excluded_xs,
+                    excluded_ys,
+                });
+                chunk_pos.clear();
+            }
+        }
+
+        MultiPieceMosaic { chunks }
+    }
+}
+
+fn was_visited(visited: &BoolVec, x: usize, y: usize, width: usize) -> bool {
+    visited.get(y * width + x).unwrap()
+}
+
+fn is_new_pos(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic, x: usize, y: usize, width: usize, start_color: Color) -> bool {
+    !was_visited(&visited, x, y, width) && mosaic.color(x, y + 1) == start_color
+}
+
 struct Pixels<T> {
     values_by_row: Vec<T>,
-    width: u32
+    width: usize
 }
 
 impl<T: Copy> Pixels<T> {
-    fn value(&self, x: u32, y: u32) -> T {
-        self.values_by_row[(y * self.width + x) as usize]
+    fn value(&self, x: usize, y: usize) -> T {
+        self.values_by_row[y * self.width + x]
     }
 }
 
 impl From<DynamicImage> for Pixels<Srgba<u8>> {
     fn from(image: DynamicImage) -> Self {
-        let width = image.width();
-        let height = image.height();
-        let mut colors = Vec::with_capacity((width * height) as usize);
+        let width = image.width() as usize;
+        let height = image.height() as usize;
+        let mut colors = Vec::with_capacity(width * height);
 
         for y in 0..height {
             for x in 0..width {
-                let color = image.get_pixel(x, y).to_rgba();
+                let color = image.get_pixel(x as u32, y as u32).to_rgba();
                 let channels = color.channels();
                 let red = channels[0];
                 let green = channels[1];
