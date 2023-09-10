@@ -51,8 +51,7 @@ pub struct Chunk {
     y_size: u32,
     z_size: u32,
     excluded_xs: Vec<BTreeSet<u32>>,
-    excluded_ys: Vec<BTreeSet<u32>>,
-    excluded_zs: Vec<BTreeSet<u32>>
+    excluded_ys: Vec<BTreeSet<u32>>
 }
 
 pub struct MultiPieceMosaic {
@@ -113,11 +112,9 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
 
                 let chunk_x_size = max_x - min_x + 1;
                 let chunk_y_size = max_y - min_y + 1;
-                let chunk_z_size = 1;
 
                 let mut excluded_xs = vec![BTreeSet::new(); chunk_y_size];
                 let mut excluded_ys = vec![BTreeSet::new(); chunk_x_size];
-                let mut excluded_zs = vec![BTreeSet::new(); chunk_z_size];
 
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
@@ -137,8 +134,7 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
                     y_size: chunk_y_size as u32,
                     z_size: 1,
                     excluded_xs,
-                    excluded_ys,
-                    excluded_zs
+                    excluded_ys
                 });
                 chunk_pos.clear();
             }
