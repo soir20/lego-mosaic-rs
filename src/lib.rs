@@ -47,11 +47,12 @@ pub struct Chunk {
     color: Color,
     x: u32,
     y: u32,
-    width: u32,
-    length: u32,
-    height: u32,
+    x_size: u32,
+    y_size: u32,
+    z_size: u32,
     excluded_xs: Vec<BTreeSet<u32>>,
-    excluded_ys: Vec<BTreeSet<u32>>
+    excluded_ys: Vec<BTreeSet<u32>>,
+    excluded_zs: Vec<BTreeSet<u32>>
 }
 
 pub struct MultiPieceMosaic {
@@ -61,8 +62,8 @@ pub struct MultiPieceMosaic {
 impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
     fn from(value: SinglePieceFlatMosaic) -> Self {
         let area = value.colors.values_by_row.len();
-        let width = value.colors.width;
-        let height = area / width;
+        let x_size = value.colors.x_size;
+        let y_size = area / x_size;
 
         let mut visited = BoolVec::with_capacity(area);
         let mut queue = VecDeque::new();
@@ -70,9 +71,9 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
 
         let mut chunks = Vec::new();
 
-        for start_y in 0..height {
-            for start_x in 0..width {
-                if was_visited(&mut visited, start_x, start_y, width) {
+        for start_y in 0..y_size {
+            for start_x in 0..x_size {
+                if was_visited(&mut visited, start_x, start_y, x_size) {
                     continue;
                 }
 
@@ -86,35 +87,37 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
 
                 while !queue.is_empty() {
                     let (x, y) = queue.pop_back().unwrap();
-                    visited.set(y * width + x, true);
+                    visited.set(y * x_size + x, true);
                     chunk_pos.insert((x, y));
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
                     max_y = min_y.max(y);
 
-                    if x > 0 && is_new_pos(&visited, &value, x - 1, y, width, start_color) {
+                    if x > 0 && is_new_pos(&visited, &value, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
                     }
 
-                    if x < width - 1 && is_new_pos(&visited, &value, x + 1, y, width, start_color) {
+                    if x < x_size - 1 && is_new_pos(&visited, &value, x + 1, y, x_size, start_color) {
                         queue.push_back((x + 1, y));
                     }
 
-                    if y > 0 && is_new_pos(&visited, &value, x, y - 1, width, start_color) {
+                    if y > 0 && is_new_pos(&visited, &value, x, y - 1, x_size, start_color) {
                         queue.push_back((x, y - 1));
                     }
 
-                    if y < height - 1 && is_new_pos(&visited, &value, x, y + 1, width, start_color) {
+                    if y < y_size - 1 && is_new_pos(&visited, &value, x, y + 1, x_size, start_color) {
                         queue.push_back((x, y + 1));
                     }
                 }
 
-                let chunk_width = max_x - min_x + 1;
-                let chunk_height = max_y - min_y + 1;
+                let chunk_x_size = max_x - min_x + 1;
+                let chunk_y_size = max_y - min_y + 1;
+                let chunk_z_size = 1;
 
-                let mut excluded_xs = vec![BTreeSet::new(); chunk_height];
-                let mut excluded_ys = vec![BTreeSet::new(); chunk_width];
+                let mut excluded_xs = vec![BTreeSet::new(); chunk_y_size];
+                let mut excluded_ys = vec![BTreeSet::new(); chunk_x_size];
+                let mut excluded_zs = vec![BTreeSet::new(); chunk_z_size];
 
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
@@ -130,11 +133,12 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
                     color: start_color,
                     x: min_x as u32,
                     y: min_y as u32,
-                    width: chunk_width as u32,
-                    length: chunk_height as u32,
-                    height: 1,
+                    x_size: chunk_x_size as u32,
+                    y_size: chunk_y_size as u32,
+                    z_size: 1,
                     excluded_xs,
                     excluded_ys,
+                    excluded_zs
                 });
                 chunk_pos.clear();
             }
@@ -144,33 +148,33 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
     }
 }
 
-fn was_visited(visited: &BoolVec, x: usize, y: usize, width: usize) -> bool {
-    visited.get(y * width + x).unwrap()
+fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
+    visited.get(y * x_size + x).unwrap()
 }
 
-fn is_new_pos(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic, x: usize, y: usize, width: usize, start_color: Color) -> bool {
-    !was_visited(&visited, x, y, width) && mosaic.color(x, y + 1) == start_color
+fn is_new_pos(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
+    !was_visited(&visited, x, y, x_size) && mosaic.color(x, y + 1) == start_color
 }
 
 struct Pixels<T> {
     values_by_row: Vec<T>,
-    width: usize
+    x_size: usize
 }
 
 impl<T: Copy> Pixels<T> {
     fn value(&self, x: usize, y: usize) -> T {
-        self.values_by_row[y * self.width + x]
+        self.values_by_row[y * self.x_size + x]
     }
 }
 
 impl From<DynamicImage> for Pixels<Srgba<u8>> {
     fn from(image: DynamicImage) -> Self {
-        let width = image.width() as usize;
-        let height = image.height() as usize;
-        let mut colors = Vec::with_capacity(width * height);
+        let x_size = image.width() as usize;
+        let y_size = image.height() as usize;
+        let mut colors = Vec::with_capacity(x_size * y_size);
 
-        for y in 0..height {
-            for x in 0..width {
+        for y in 0..y_size {
+            for x in 0..x_size {
                 let color = image.get_pixel(x as u32, y as u32).to_rgba();
                 let channels = color.channels();
                 let red = channels[0];
@@ -182,7 +186,7 @@ impl From<DynamicImage> for Pixels<Srgba<u8>> {
             }
         }
 
-        Pixels { values_by_row: colors, width }
+        Pixels { values_by_row: colors, x_size }
     }
 }
 
@@ -191,7 +195,7 @@ impl Pixels<Srgba<u8>> {
         let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
-        Pixels { values_by_row: new_colors, width: self.width }
+        Pixels { values_by_row: new_colors, x_size: self.x_size }
     }
 
     fn find_similar_color(color: Srgba<u8>, palette: &[Color]) -> Color {
