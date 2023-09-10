@@ -6,13 +6,14 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 pub struct SinglePieceFlatMosaic {
+    piece_id: u32,
     colors: Pixels<Color>
 }
 
 impl SinglePieceFlatMosaic {
-    pub fn from_image(image: DynamicImage, palette: &[Color]) -> SinglePieceFlatMosaic {
+    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: u32) -> SinglePieceFlatMosaic {
         let raw_pixels: Pixels<Color> = image.into();
-        SinglePieceFlatMosaic { colors: raw_pixels.with_palette(palette) }
+        SinglePieceFlatMosaic { piece_id, colors: raw_pixels.with_palette(palette) }
     }
 
     pub fn color(&self, x: usize, y: usize) -> Color {
@@ -21,11 +22,12 @@ impl SinglePieceFlatMosaic {
 
     pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic {
         let height_map = self.colors.height_map(layers, darker_areas_taller);
-        SinglePiece3dMosaic { colors: self.colors, height_map }
+        SinglePiece3dMosaic { piece_id: self.piece_id, colors: self.colors, height_map }
     }
 }
 
 pub struct SinglePiece3dMosaic {
+    piece_id: u32,
     colors: Pixels<Color>,
     height_map: HeightMap
 }
@@ -43,7 +45,7 @@ impl SinglePiece3dMosaic {
 }
 
 pub struct Chunk {
-    id: u32,
+    piece_id: u32,
     color: Color,
     x: u32,
     y: u32,
@@ -126,7 +128,7 @@ impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
                 }
 
                 chunks.push(Chunk {
-                    id: 0,
+                    piece_id: value.piece_id,
                     color: start_color,
                     x: min_x as u32,
                     y: min_y as u32,
