@@ -5,13 +5,13 @@ use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
 pub type Color = Srgba<u8>;
-pub struct SinglePieceFlatMosaic {
-    piece_id: u32,
+pub struct SinglePieceFlatMosaic<I> {
+    piece_id: I,
     colors: Pixels<Color>
 }
 
-impl SinglePieceFlatMosaic {
-    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: u32) -> SinglePieceFlatMosaic {
+impl<I: Copy> SinglePieceFlatMosaic<I> {
+    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: I) -> SinglePieceFlatMosaic<I> {
         let raw_pixels: Pixels<Color> = image.into();
         SinglePieceFlatMosaic { piece_id, colors: raw_pixels.with_palette(palette) }
     }
@@ -20,19 +20,19 @@ impl SinglePieceFlatMosaic {
         self.colors.value(x, y)
     }
 
-    pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic {
+    pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic<I> {
         let height_map = self.colors.height_map(layers, darker_areas_taller);
         SinglePiece3dMosaic { piece_id: self.piece_id, colors: self.colors, height_map }
     }
 }
 
-pub struct SinglePiece3dMosaic {
-    piece_id: u32,
+pub struct SinglePiece3dMosaic<I> {
+    piece_id: I,
     colors: Pixels<Color>,
     height_map: HeightMap
 }
 
-impl SinglePiece3dMosaic {
+impl<I: Copy> SinglePiece3dMosaic<I> {
 
     pub fn color(&self, x: u32, y: u32) -> Color {
         self.colors.value(x as usize, y as usize)
@@ -44,8 +44,8 @@ impl SinglePiece3dMosaic {
 
 }
 
-pub struct Chunk {
-    piece_id: u32,
+pub struct Chunk<I> {
+    piece_id: I,
     color: Color,
     x: u32,
     y: u32,
@@ -56,12 +56,12 @@ pub struct Chunk {
     excluded_ys: Vec<BTreeSet<u32>>
 }
 
-pub struct MultiPieceMosaic {
-    chunks: Vec<Chunk>
+pub struct MultiPieceMosaic<I> {
+    chunks: Vec<Chunk<I>>
 }
 
-impl From<SinglePieceFlatMosaic> for MultiPieceMosaic {
-    fn from(value: SinglePieceFlatMosaic) -> Self {
+impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
+    fn from(value: SinglePieceFlatMosaic<I>) -> Self {
         let area = value.colors.values_by_row.len();
         let x_size = value.colors.x_size;
         let y_size = area / x_size;
@@ -150,7 +150,7 @@ fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
     visited.get(y * x_size + x).unwrap()
 }
 
-fn is_new_pos(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
+fn is_new_pos<I: Copy>(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic<I>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
     !was_visited(&visited, x, y, x_size) && mosaic.color(x, y + 1) == start_color
 }
 
