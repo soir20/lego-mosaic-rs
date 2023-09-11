@@ -5,44 +5,6 @@ use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
 pub type Color = Srgba<u8>;
-pub struct SinglePieceFlatMosaic<I> {
-    piece_id: I,
-    colors: Pixels<Color>
-}
-
-impl<I: Copy> SinglePieceFlatMosaic<I> {
-    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: I) -> SinglePieceFlatMosaic<I> {
-        let raw_pixels: Pixels<Color> = image.into();
-        SinglePieceFlatMosaic { piece_id, colors: raw_pixels.with_palette(palette) }
-    }
-
-    pub fn color(&self, x: usize, y: usize) -> Color {
-        self.colors.value(x, y)
-    }
-
-    pub fn make_3d(self, layers: u16, darker_areas_taller: bool) -> SinglePiece3dMosaic<I> {
-        let height_map = self.colors.height_map(layers, darker_areas_taller);
-        SinglePiece3dMosaic { piece_id: self.piece_id, colors: self.colors, height_map }
-    }
-}
-
-pub struct SinglePiece3dMosaic<I> {
-    piece_id: I,
-    colors: Pixels<Color>,
-    height_map: HeightMap
-}
-
-impl<I: Copy> SinglePiece3dMosaic<I> {
-
-    pub fn color(&self, x: u32, y: u32) -> Color {
-        self.colors.value(x as usize, y as usize)
-    }
-
-    pub fn height(&self, x: u32, y: u32) -> u16 {
-        *self.height_map.get(&color_as_key(self.color(x, y))).unwrap_or(&1)
-    }
-
-}
 
 pub struct Chunk<I> {
     piece_id: I,
@@ -57,14 +19,18 @@ pub struct Chunk<I> {
     excluded_zs: Vec<BTreeSet<u32>>
 }
 
-pub struct MultiPieceMosaic<I> {
+pub struct Mosaic<I> {
     chunks: Vec<Chunk<I>>
 }
 
-impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
-    fn from(value: SinglePieceFlatMosaic<I>) -> Self {
-        let area = value.colors.values_by_row.len();
-        let x_size = value.colors.x_size;
+impl<I: Copy> Mosaic<I> {
+
+    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: I) -> Mosaic<I> {
+        let raw_colors: Pixels<Srgba<u8>> = image.into();
+        let colors = raw_colors.with_palette(palette);
+
+        let area = colors.values_by_row.len();
+        let x_size = colors.x_size;
         let y_size = area / x_size;
 
         let mut visited = BoolVec::with_capacity(area);
@@ -79,7 +45,7 @@ impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
                     continue;
                 }
 
-                let start_color = value.color(start_x, start_y);
+                let start_color = colors.value(start_x, start_y);
                 queue.push_back((start_x, start_y));
 
                 let mut min_x = start_x;
@@ -96,19 +62,19 @@ impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
                     max_x = max_x.max(x);
                     max_y = min_y.max(y);
 
-                    if x > 0 && is_new_pos(&visited, &value, x - 1, y, x_size, start_color) {
+                    if x > 0 && is_new_pos::<I>(&visited, &colors, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
                     }
 
-                    if x < x_size - 1 && is_new_pos(&visited, &value, x + 1, y, x_size, start_color) {
+                    if x < x_size - 1 && is_new_pos::<I>(&visited, &colors, x + 1, y, x_size, start_color) {
                         queue.push_back((x + 1, y));
                     }
 
-                    if y > 0 && is_new_pos(&visited, &value, x, y - 1, x_size, start_color) {
+                    if y > 0 && is_new_pos::<I>(&visited, &colors, x, y - 1, x_size, start_color) {
                         queue.push_back((x, y - 1));
                     }
 
-                    if y < y_size - 1 && is_new_pos(&visited, &value, x, y + 1, x_size, start_color) {
+                    if y < y_size - 1 && is_new_pos::<I>(&visited, &colors, x, y + 1, x_size, start_color) {
                         queue.push_back((x, y + 1));
                     }
                 }
@@ -130,7 +96,7 @@ impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
                 }
 
                 chunks.push(Chunk {
-                    piece_id: value.piece_id,
+                    piece_id,
                     color: start_color,
                     x: min_x as u32,
                     y: min_y as u32,
@@ -145,16 +111,17 @@ impl<I: Copy> From<SinglePieceFlatMosaic<I>> for MultiPieceMosaic<I> {
             }
         }
 
-        MultiPieceMosaic { chunks }
+        Mosaic { chunks }
     }
+
 }
 
 fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
     visited.get(y * x_size + x).unwrap()
 }
 
-fn is_new_pos<I: Copy>(visited: &BoolVec, mosaic: &SinglePieceFlatMosaic<I>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
-    !was_visited(&visited, x, y, x_size) && mosaic.color(x, y + 1) == start_color
+fn is_new_pos<I: Copy>(visited: &BoolVec, colors: &Pixels<Color>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
+    !was_visited(&visited, x, y, x_size) && colors.value(x, y) == start_color
 }
 
 struct Pixels<T> {
