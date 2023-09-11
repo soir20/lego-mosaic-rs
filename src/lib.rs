@@ -54,7 +54,7 @@ impl<I: Copy> Mosaic<I> {
                 let mut max_y = start_y;
 
                 while !queue.is_empty() {
-                    let (x, y) = queue.pop_back().unwrap();
+                    let (x, y) = queue.pop_front().unwrap();
                     visited.set(y * x_size + x, true);
                     chunk_pos.insert((x, y));
                     min_x = min_x.min(x);
