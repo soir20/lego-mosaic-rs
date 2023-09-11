@@ -6,8 +6,8 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-pub struct Chunk<I> {
-    piece_id: I,
+pub struct Chunk<P> {
+    piece: P,
     color: Color,
     x: u32,
     y: u32,
@@ -19,13 +19,13 @@ pub struct Chunk<I> {
     excluded_zs: Vec<BTreeSet<u32>>
 }
 
-pub struct Mosaic<I> {
-    chunks: Vec<Chunk<I>>
+pub struct Mosaic<P> {
+    chunks: Vec<Chunk<P>>
 }
 
-impl<I: Copy> Mosaic<I> {
+impl<P: Copy> Mosaic<P> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], piece_id: I) -> Mosaic<I> {
+    pub fn from_image(image: DynamicImage, palette: &[Color], piece: P) -> Mosaic<P> {
         let raw_colors: Pixels<Srgba<u8>> = image.into();
         let colors = raw_colors.with_palette(palette);
 
@@ -62,19 +62,19 @@ impl<I: Copy> Mosaic<I> {
                     max_x = max_x.max(x);
                     max_y = min_y.max(y);
 
-                    if x > 0 && is_new_pos::<I>(&visited, &colors, x - 1, y, x_size, start_color) {
+                    if x > 0 && is_new_pos::<P>(&visited, &colors, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
                     }
 
-                    if x < x_size - 1 && is_new_pos::<I>(&visited, &colors, x + 1, y, x_size, start_color) {
+                    if x < x_size - 1 && is_new_pos::<P>(&visited, &colors, x + 1, y, x_size, start_color) {
                         queue.push_back((x + 1, y));
                     }
 
-                    if y > 0 && is_new_pos::<I>(&visited, &colors, x, y - 1, x_size, start_color) {
+                    if y > 0 && is_new_pos::<P>(&visited, &colors, x, y - 1, x_size, start_color) {
                         queue.push_back((x, y - 1));
                     }
 
-                    if y < y_size - 1 && is_new_pos::<I>(&visited, &colors, x, y + 1, x_size, start_color) {
+                    if y < y_size - 1 && is_new_pos::<P>(&visited, &colors, x, y + 1, x_size, start_color) {
                         queue.push_back((x, y + 1));
                     }
                 }
@@ -96,7 +96,7 @@ impl<I: Copy> Mosaic<I> {
                 }
 
                 chunks.push(Chunk {
-                    piece_id,
+                    piece,
                     color: start_color,
                     x: min_x as u32,
                     y: min_y as u32,
@@ -120,7 +120,7 @@ fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
     visited.get(y * x_size + x).unwrap()
 }
 
-fn is_new_pos<I: Copy>(visited: &BoolVec, colors: &Pixels<Color>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
+fn is_new_pos<P: Copy>(visited: &BoolVec, colors: &Pixels<Color>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
     !was_visited(&visited, x, y, x_size) && colors.value(x, y) == start_color
 }
 
