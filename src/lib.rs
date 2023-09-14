@@ -1,4 +1,6 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::iter;
 use boolvec::BoolVec;
 use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
@@ -6,26 +8,158 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-pub struct Chunk<P> {
-    piece: P,
-    color: Color,
-    x: u32,
-    y: u32,
-    x_size: u32,
-    y_size: u32,
-    z_size: u32,
-    excluded_xs: Vec<BTreeSet<u32>>,
-    excluded_ys: Vec<BTreeSet<u32>>,
-    excluded_zs: Vec<BTreeSet<u32>>
+pub trait Piece {
+    type PieceType;
+
+    fn x_size(&self) -> u8;
+
+    fn y_size(&self) -> u8;
+
+    fn z_size(&self) -> u8;
+
+    fn piece_type(&self) -> Self::PieceType;
+
 }
 
-pub struct Mosaic<P> {
+struct PieceRow<P> {
+    piece: P,
+    len: u16,
+    x: u16,
+    y: u16,
+    z: u16
+}
+
+#[derive(Clone)]
+struct Dimension {
+    x_size: u8,
+    y_size: u8
+}
+
+impl Dimension {
+    fn area(&self) -> u16 {
+        self.x_size as u16 * self.y_size as u16
+    }
+}
+
+impl Eq for Dimension {}
+
+impl PartialEq<Self> for Dimension {
+    fn eq(&self, other: &Self) -> bool {
+        self.x_size == other.x_size && self.y_size == other.y_size
+    }
+}
+
+impl PartialOrd<Self> for Dimension {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Dimension {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let area1 = self.area();
+        let area2 = other.area();
+
+        // Sort in descending order
+        area2.cmp(&area1)
+
+    }
+}
+
+struct PieceIndex {
+    index: usize,
+    x: u16,
+    y: u16,
+    x_size: u8,
+    y_size: u8
+}
+
+struct Chunk<T, P> {
+    piece_type: T,
+    color: Color,
+    x: u16,
+    y: u16,
+    z: u16,
+    x_size: u16,
+    y_size: u16,
+    z_size: u16,
+    ys_included: Vec<BTreeSet<u16>>,
+    pieces: Vec<(u16, u16, u16, P)>
+}
+
+impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
+    fn reduce_pieces(&self, pieces: &[P]) {
+        // partition by type, 1x1 pieces
+        // reduce chunks matching type
+        // don't error if chunks can't be transformed--throw error when single-piece mosaic created
+    }
+
+    fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<PieceIndex> {
+        let mut pieces = Vec::new();
+
+        for x in 0..x_size {
+            let x_index = x as usize;
+
+            while !ys_included_by_x[x_index].is_empty() {
+                let ys_included = &ys_included_by_x[x_index];
+
+                if let Some(&y) = ys_included.first() {
+                    for piece_index in 0..sizes.len() {
+                        let piece = &sizes[piece_index];
+
+                        // need to check that at least one fits
+                        if Chunk::<T, P>::fits(x, y, piece.x_size, piece.y_size, ys_included_by_x) {
+                            Chunk::<T, P>::remove_piece(x, y, piece.x_size, piece.y_size, ys_included_by_x);
+                            pieces.push(PieceIndex {
+                                index: piece_index,
+                                x,
+                                y,
+                                x_size: piece.x_size,
+                                y_size: piece.y_size
+                            })
+                        }
+                    }
+                }
+            }
+        }
+
+        pieces
+    }
+
+    fn fits(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &[BTreeSet<u16>]) -> bool {
+        let max_y = y + y_size as u16;
+
+        for test_x in x..(x + x_size as u16) {
+            if ys_included_by_x[test_x as usize].range(y..max_y).count() < y_size as usize {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn remove_piece(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &mut [BTreeSet<u16>]) {
+        let min_x = x as usize;
+        let max_x = x as usize + x_size as usize;
+        let max_y = y + y_size as u16;
+
+        for cur_x in min_x..max_x {
+            let mut ys_included = &mut ys_included_by_x[cur_x];
+
+            for cur_y in y..max_y {
+                ys_included.remove(&cur_y);
+            }
+        }
+    }
+}
+
+/*pub struct Mosaic<P> {
     chunks: Vec<Chunk<P>>
 }
 
 impl<P: Copy> Mosaic<P> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], piece: P) -> Mosaic<P> {
+    pub fn from_image(image: DynamicImage, palette: &[Color], piece: P) -> Self {
         let raw_colors: Pixels<Srgba<u8>> = image.into();
         let colors = raw_colors.with_palette(palette);
 
@@ -84,7 +218,6 @@ impl<P: Copy> Mosaic<P> {
 
                 let mut excluded_xs = vec![BTreeSet::new(); chunk_y_size];
                 let mut excluded_ys = vec![BTreeSet::new(); chunk_x_size];
-                let mut excluded_zs = vec![BTreeSet::new(); area];
 
                 for y in min_y..=max_y {
                     for x in min_x..=max_x {
@@ -104,8 +237,7 @@ impl<P: Copy> Mosaic<P> {
                     y_size: chunk_y_size as u32,
                     z_size: 1,
                     excluded_xs,
-                    excluded_ys,
-                    excluded_zs
+                    excluded_ys
                 });
                 chunk_pos.clear();
             }
@@ -113,6 +245,10 @@ impl<P: Copy> Mosaic<P> {
 
         Mosaic { chunks }
     }
+
+    //pub fn reduce_pieces(self) -> Self {
+
+    //}
 
 }
 
@@ -244,4 +380,4 @@ fn color_as_key(color: Color) -> u64 {
     key |= (color.blue as u64) << 16;
     key |= color.alpha as u64;
     key
-}
+}*/
