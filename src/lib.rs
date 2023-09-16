@@ -8,23 +8,38 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-
-
 pub trait Brick {
-    type BrickType;
+    type UnitBrick;
 
     fn x_size(&self) -> u8;
 
     fn y_size(&self) -> u8;
 
     fn z_size(&self) -> u8;
-
-    fn brick_type(&self) -> Self::BrickType;
-
 }
 
-struct BrickRow<P> {
-    brick: P,
+pub trait UnitBrick {
+    fn get() -> Self;
+}
+
+impl<B: UnitBrick> Brick for B {
+    type UnitBrick = Self;
+
+    fn x_size(&self) -> u8 {
+        1
+    }
+
+    fn y_size(&self) -> u8 {
+        1
+    }
+
+    fn z_size(&self) -> u8 {
+        1
+    }
+}
+
+struct BrickRow<B> {
+    brick: B,
     len: u16,
     x: u16,
     y: u16,
@@ -76,8 +91,8 @@ struct BrickIndex {
     y_size: u8
 }
 
-struct Chunk<T, P> {
-    brick_type: T,
+struct Chunk<U, B> {
+    brick_type: U,
     color: Color,
     x: u16,
     y: u16,
@@ -86,11 +101,11 @@ struct Chunk<T, P> {
     y_size: u16,
     z_size: u16,
     ys_included: Vec<BTreeSet<u16>>,
-    bricks: Vec<(u16, u16, u16, P)>
+    bricks: Vec<(u16, u16, u16, B)>
 }
 
-impl<T, P: Brick<BrickType=T>> Chunk<T, P> {
-    fn reduce_bricks(&self, bricks: &[P]) {
+impl<U, B: Brick<UnitBrick=U>> Chunk<U, B> {
+    fn reduce_bricks(&self, bricks: &[B]) {
         // partition by type, 1x1 bricks
         // reduce chunks matching type
         // don't error if chunks can't be transformed--throw error when single-brick mosaic created
@@ -110,8 +125,8 @@ impl<T, P: Brick<BrickType=T>> Chunk<T, P> {
                         let brick = &sizes[brick_index];
 
                         // need to check that at least one fits
-                        if Chunk::<T, P>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
-                            Chunk::<T, P>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
+                        if Chunk::<U, B>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
+                            Chunk::<U, B>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
                             bricks.push(BrickIndex {
                                 index: brick_index,
                                 x,
