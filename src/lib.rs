@@ -8,8 +8,10 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-pub trait Piece {
-    type PieceType;
+
+
+pub trait Brick {
+    type BrickType;
 
     fn x_size(&self) -> u8;
 
@@ -17,12 +19,12 @@ pub trait Piece {
 
     fn z_size(&self) -> u8;
 
-    fn piece_type(&self) -> Self::PieceType;
+    fn brick_type(&self) -> Self::BrickType;
 
 }
 
-struct PieceRow<P> {
-    piece: P,
+struct BrickRow<P> {
+    brick: P,
     len: u16,
     x: u16,
     y: u16,
@@ -66,7 +68,7 @@ impl Ord for Dimension {
     }
 }
 
-struct PieceIndex {
+struct BrickIndex {
     index: usize,
     x: u16,
     y: u16,
@@ -75,7 +77,7 @@ struct PieceIndex {
 }
 
 struct Chunk<T, P> {
-    piece_type: T,
+    brick_type: T,
     color: Color,
     x: u16,
     y: u16,
@@ -84,18 +86,18 @@ struct Chunk<T, P> {
     y_size: u16,
     z_size: u16,
     ys_included: Vec<BTreeSet<u16>>,
-    pieces: Vec<(u16, u16, u16, P)>
+    bricks: Vec<(u16, u16, u16, P)>
 }
 
-impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
-    fn reduce_pieces(&self, pieces: &[P]) {
-        // partition by type, 1x1 pieces
+impl<T, P: Brick<BrickType=T>> Chunk<T, P> {
+    fn reduce_bricks(&self, bricks: &[P]) {
+        // partition by type, 1x1 bricks
         // reduce chunks matching type
-        // don't error if chunks can't be transformed--throw error when single-piece mosaic created
+        // don't error if chunks can't be transformed--throw error when single-brick mosaic created
     }
 
-    fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<PieceIndex> {
-        let mut pieces = Vec::new();
+    fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<BrickIndex> {
+        let mut bricks = Vec::new();
 
         for x in 0..x_size {
             let x_index = x as usize;
@@ -104,18 +106,18 @@ impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
                 let ys_included = &ys_included_by_x[x_index];
 
                 if let Some(&y) = ys_included.first() {
-                    for piece_index in 0..sizes.len() {
-                        let piece = &sizes[piece_index];
+                    for brick_index in 0..sizes.len() {
+                        let brick = &sizes[brick_index];
 
                         // need to check that at least one fits
-                        if Chunk::<T, P>::fits(x, y, piece.x_size, piece.y_size, ys_included_by_x) {
-                            Chunk::<T, P>::remove_piece(x, y, piece.x_size, piece.y_size, ys_included_by_x);
-                            pieces.push(PieceIndex {
-                                index: piece_index,
+                        if Chunk::<T, P>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
+                            Chunk::<T, P>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
+                            bricks.push(BrickIndex {
+                                index: brick_index,
                                 x,
                                 y,
-                                x_size: piece.x_size,
-                                y_size: piece.y_size
+                                x_size: brick.x_size,
+                                y_size: brick.y_size
                             })
                         }
                     }
@@ -123,7 +125,7 @@ impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
             }
         }
 
-        pieces
+        bricks
     }
 
     fn fits(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &[BTreeSet<u16>]) -> bool {
@@ -138,7 +140,7 @@ impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
         true
     }
 
-    fn remove_piece(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &mut [BTreeSet<u16>]) {
+    fn remove_brick(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &mut [BTreeSet<u16>]) {
         let min_x = x as usize;
         let max_x = x as usize + x_size as usize;
         let max_y = y + y_size as u16;
@@ -159,7 +161,7 @@ impl<T, P: Piece<PieceType=T>> Chunk<T, P> {
 
 impl<P: Copy> Mosaic<P> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], piece: P) -> Self {
+    pub fn from_image(image: DynamicImage, palette: &[Color], brick: P) -> Self {
         let raw_colors: Pixels<Srgba<u8>> = image.into();
         let colors = raw_colors.with_palette(palette);
 
@@ -229,7 +231,7 @@ impl<P: Copy> Mosaic<P> {
                 }
 
                 chunks.push(Chunk {
-                    piece,
+                    brick,
                     color: start_color,
                     x: min_x as u32,
                     y: min_y as u32,
@@ -246,7 +248,7 @@ impl<P: Copy> Mosaic<P> {
         Mosaic { chunks }
     }
 
-    //pub fn reduce_pieces(self) -> Self {
+    //pub fn reduce_bricks(self) -> Self {
 
     //}
 
