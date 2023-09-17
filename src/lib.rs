@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
-use std::iter;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::hash::Hash;
 use boolvec::BoolVec;
 use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
@@ -8,7 +8,7 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-pub trait Brick {
+pub trait Brick: Copy {
     type UnitBrick;
 
     fn x_size(&self) -> u8;
@@ -16,11 +16,11 @@ pub trait Brick {
     fn y_size(&self) -> u8;
 
     fn z_size(&self) -> u8;
+
+    fn unit_brick(&self) -> Self::UnitBrick;
 }
 
-pub trait UnitBrick {
-    fn get() -> Self;
-}
+pub trait UnitBrick: Copy + Hash + Eq {}
 
 impl<B: UnitBrick> Brick for B {
     type UnitBrick = Self;
@@ -35,6 +35,10 @@ impl<B: UnitBrick> Brick for B {
 
     fn z_size(&self) -> u8 {
         1
+    }
+
+    fn unit_brick(&self) -> Self::UnitBrick {
+        *self
     }
 }
 
@@ -104,11 +108,39 @@ struct Chunk<U, B> {
     bricks: Vec<(u16, u16, u16, B)>
 }
 
-impl<U, B: Brick<UnitBrick=U>> Chunk<U, B> {
+// can't restrict unit brick type
+impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
     fn reduce_bricks(&self, bricks: &[B]) {
+        let bricks_by_z_size: HashMap<U, BTreeMap<u16, Vec<Dimension>>> = bricks.iter()
+            .fold(HashMap::new(), |mut partitions, brick| {
+                partitions.entry(brick.unit_brick()).or_insert_with(|| Vec::new()).push(brick);
+                partitions
+            })
+            .into_iter()
+            .map(|(unit_brick, bricks)| (unit_brick, Chunk::<U, B>::partition_by_z_size(bricks)))
+            .collect();
+
         // partition by type, 1x1 bricks
         // reduce chunks matching type
         // don't error if chunks can't be transformed--throw error when single-brick mosaic created
+    }
+
+    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<Dimension>> {
+        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
+            partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
+            partitions
+        })
+            .into_iter()
+            .filter(|(z_size, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
+            .map(|(z_size, bricks)| {
+                let mut sizes: Vec<Dimension> = bricks.into_iter()
+                    .map(|brick| Dimension { x_size: 0, y_size: 0 })
+                    .collect();
+                sizes.sort();
+
+                (z_size as u16, sizes)
+            })
+            .collect()
     }
 
     fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<BrickIndex> {
