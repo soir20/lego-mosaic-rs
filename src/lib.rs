@@ -8,46 +8,14 @@ use palette::Srgba;
 
 pub type Color = Srgba<u8>;
 
-pub trait Brick: Copy {
-    type UnitBrick;
-
+pub trait Brick: Copy + Hash + Eq {
     fn x_size(&self) -> u8;
 
     fn y_size(&self) -> u8;
 
     fn z_size(&self) -> u8;
 
-    fn unit_brick(&self) -> Self::UnitBrick;
-}
-
-pub trait UnitBrick: Copy + Hash + Eq {}
-
-impl<B: UnitBrick> Brick for B {
-    type UnitBrick = Self;
-
-    fn x_size(&self) -> u8 {
-        1
-    }
-
-    fn y_size(&self) -> u8 {
-        1
-    }
-
-    fn z_size(&self) -> u8 {
-        1
-    }
-
-    fn unit_brick(&self) -> Self::UnitBrick {
-        *self
-    }
-}
-
-struct BrickRow<B> {
-    brick: B,
-    len: u16,
-    x: u16,
-    y: u16,
-    z: u16
+    fn unit_brick(&self) -> Self;
 }
 
 #[derive(Clone)]
@@ -90,13 +58,18 @@ impl Ord for Dimension {
 struct BrickIndex {
     index: usize,
     x: u16,
-    y: u16,
-    x_size: u8,
-    y_size: u8
+    y: u16
 }
 
-struct Chunk<U, B> {
-    unit_brick: U,
+struct PlacedBrick<B> {
+    x: u16,
+    y: u16,
+    z: u16,
+    brick: B
+}
+
+struct Chunk<B> {
+    unit_brick: B,
     color: Color,
     x: u16,
     y: u16,
@@ -105,41 +78,50 @@ struct Chunk<U, B> {
     y_size: u16,
     z_size: u16,
     ys_included: Vec<BTreeSet<u16>>,
-    bricks: Vec<(u16, u16, u16, B)>
+    bricks: Vec<PlacedBrick<B>>
 }
 
-impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
-    fn reduce_bricks(&self, bricks: &[B]) {
-        let bricks_by_z_size: HashMap<U, BTreeMap<u16, Vec<Dimension>>> = bricks.iter()
-            .fold(HashMap::new(), |mut partitions, brick| {
-                partitions.entry(brick.unit_brick()).or_insert_with(|| Vec::new()).push(brick);
-                partitions
-            })
-            .into_iter()
-            .map(|(unit_brick, bricks)| (unit_brick, Chunk::<U, B>::partition_by_z_size(bricks)))
-            .collect();
+impl<B: Brick> Chunk<B> {
 
-        // partition by type, 1x1 bricks
-        // reduce chunks matching type
-        // don't error if chunks can't be transformed--throw error when single-brick mosaic created
-    }
+    fn reduce_bricks(mut self, bricks: &[B], bricks_by_z_size: &BTreeMap<u16, Vec<Dimension>>) -> Self {
+        let mut last_z_index = 0;
+        let mut remaining_height = self.z_size;
+        let mut layers = Vec::new();
 
-    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<Dimension>> {
-        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
-            partitions
-        })
-            .into_iter()
-            .filter(|(z_size, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
-            .map(|(z_size, bricks)| {
-                let mut sizes: Vec<Dimension> = bricks.into_iter()
-                    .map(|brick| Dimension { x_size: 0, y_size: 0 })
-                    .collect();
-                sizes.sort();
+        for &z_size in bricks_by_z_size.keys().rev() {
+            let layers_of_size = remaining_height / z_size;
+            remaining_height %= z_size;
 
-                (z_size as u16, sizes)
-            })
-            .collect()
+            for _ in 0..layers_of_size {
+                layers.push((z_size, last_z_index));
+                last_z_index += z_size;
+            }
+        }
+
+        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(layer, z_index)| {
+            let sizes = &bricks_by_z_size[&layer][..];
+            Chunk::<B>::reduce_single_layer(sizes, self.x_size, &mut self.ys_included[..])
+                .into_iter()
+                .map(move |brick_index| PlacedBrick {
+                    x: self.x + brick_index.x,
+                    y: self.y + brick_index.y,
+                    z: z_index,
+                    brick: bricks[brick_index.index],
+                })
+        }).collect();
+
+        Chunk {
+            unit_brick: self.unit_brick,
+            color: self.color,
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            x_size: self.x_size,
+            y_size: self.y_size,
+            z_size: self.z_size,
+            ys_included: self.ys_included,
+            bricks,
+        }
     }
 
     fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<BrickIndex> {
@@ -156,14 +138,12 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
                         let brick = &sizes[brick_index];
 
                         // need to check that at least one fits
-                        if Chunk::<U, B>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
-                            Chunk::<U, B>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
+                        if Chunk::<B>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
+                            Chunk::<B>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
                             bricks.push(BrickIndex {
                                 index: brick_index,
                                 x,
                                 y,
-                                x_size: brick.x_size,
-                                y_size: brick.y_size
                             })
                         }
                     }
@@ -192,7 +172,7 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
         let max_y = y + y_size as u16;
 
         for cur_x in min_x..max_x {
-            let mut ys_included = &mut ys_included_by_x[cur_x];
+            let ys_included = &mut ys_included_by_x[cur_x];
 
             for cur_y in y..max_y {
                 ys_included.remove(&cur_y);
@@ -201,13 +181,15 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
     }
 }
 
-pub struct Mosaic<U, B> {
-    chunks: Vec<Chunk<U, B>>
+pub struct Mosaic<B> {
+    chunks: Vec<Chunk<B>>
 }
 
-impl<U: UnitBrick, B: Brick<UnitBrick=U>> Mosaic<U, B> {
+impl<B: Brick> Mosaic<B> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], brick: U) -> Self {
+    pub fn from_image(image: DynamicImage, palette: &[Color], unit_brick: B) -> Self {
+        assert_unit_brick(unit_brick);
+
         let raw_colors: Pixels<Srgba<u8>> = image.into();
         let colors = raw_colors.with_palette(palette);
 
@@ -240,7 +222,12 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Mosaic<U, B> {
                     let (x, y) = queue.pop_front().unwrap();
                     visited.set(y * x_size + x, true);
 
-                    bricks.push(brick);
+                    bricks.push(PlacedBrick {
+                        x: x as u16,
+                        y: y as u16,
+                        z: 0,
+                        brick: unit_brick,
+                    });
                     ys_included.resize(ys_included.len().max(x), BTreeSet::new());
                     ys_included[x].insert(x as u16);
 
@@ -270,7 +257,7 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Mosaic<U, B> {
                 let chunk_y_size = max_y - min_y + 1;
 
                 chunks.push(Chunk {
-                    unit_brick: brick.unit_brick(),
+                    unit_brick,
                     color: start_color,
                     x: min_x as u16,
                     y: min_y as u16,
@@ -280,17 +267,51 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Mosaic<U, B> {
                     z_size: 1,
                     ys_included,
                     bricks,
-                });
-                bricks.clear();
+                })
             }
         }
 
         Mosaic { chunks }
     }
 
-    //pub fn reduce_bricks(self) -> Self {
+    pub fn reduce_bricks(self, bricks: &[B]) -> Mosaic<B> {
+        let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<Dimension>>> = bricks.iter()
+            .fold(HashMap::new(), |mut partitions, brick| {
+                let unit_brick = assert_unit_brick(brick.unit_brick());
+                partitions.entry(unit_brick).or_insert_with(|| Vec::new()).push(brick);
+                partitions
+            })
+            .into_iter()
+            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B>::partition_by_z_size(bricks)))
+            .collect();
 
-    //}
+        let chunks = self.chunks.into_iter()
+            .map(|chunk| {
+                let bricks_by_z_size = &bricks_by_z_size[&chunk.unit_brick];
+                chunk.reduce_bricks(bricks, bricks_by_z_size)
+            })
+            .collect();
+
+        Mosaic { chunks }
+    }
+
+    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<Dimension>> {
+        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
+            partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
+            partitions
+        })
+            .into_iter()
+            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
+            .map(|(z_size, bricks)| {
+                let mut sizes: Vec<Dimension> = bricks.into_iter()
+                    .map(|brick| Dimension { x_size: brick.x_size(), y_size: brick.y_size() })
+                    .collect();
+                sizes.sort();
+
+                (z_size as u16, sizes)
+            })
+            .collect()
+    }
 
 }
 
@@ -422,4 +443,12 @@ fn color_as_key(color: Color) -> u64 {
     key |= (color.blue as u64) << 16;
     key |= color.alpha as u64;
     key
+}
+
+fn assert_unit_brick<B: Brick>(brick: B) -> B {
+    assert_eq!(1, brick.x_size());
+    assert_eq!(1, brick.y_size());
+    assert_eq!(1, brick.z_size());
+
+    brick
 }
