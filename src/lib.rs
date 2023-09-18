@@ -18,32 +18,39 @@ pub trait Brick: Copy + Hash + Eq {
     fn unit_brick(&self) -> Self;
 }
 
-struct Dimension {
-    x_size: u8,
-    y_size: u8
+struct AreaSortedBrick<B> {
+    brick: B
 }
 
-impl Dimension {
+impl<B: Brick> AreaSortedBrick<B> {
+    fn x_size(&self) -> u8 {
+        self.brick.x_size()
+    }
+
+    fn y_size(&self) -> u8 {
+        self.brick.y_size()
+    }
+
     fn area(&self) -> u16 {
-        self.x_size as u16 * self.y_size as u16
+        self.x_size() as u16 * self.y_size() as u16
     }
 }
 
-impl Eq for Dimension {}
+impl<B: Brick> Eq for AreaSortedBrick<B> {}
 
-impl PartialEq<Self> for Dimension {
+impl<B: Brick> PartialEq<Self> for AreaSortedBrick<B> {
     fn eq(&self, other: &Self) -> bool {
-        self.x_size == other.x_size && self.y_size == other.y_size
+        self.x_size() == other.x_size() && self.y_size() == other.y_size()
     }
 }
 
-impl PartialOrd<Self> for Dimension {
+impl<B: Brick> PartialOrd<Self> for AreaSortedBrick<B> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Dimension {
+impl<B: Brick> Ord for AreaSortedBrick<B> {
     fn cmp(&self, other: &Self) -> Ordering {
         let area1 = self.area();
         let area2 = other.area();
@@ -54,10 +61,10 @@ impl Ord for Dimension {
     }
 }
 
-struct BrickIndex {
-    index: usize,
+struct LayerPlacedBrick<B> {
     x: u16,
-    y: u16
+    y: u16,
+    brick: B
 }
 
 struct PlacedBrick<B> {
@@ -82,7 +89,7 @@ struct Chunk<B> {
 
 impl<B: Brick> Chunk<B> {
 
-    fn reduce_bricks(mut self, bricks: &[B], bricks_by_z_size: &BTreeMap<u16, Vec<Dimension>>) -> Self {
+    fn reduce_bricks(self, bricks_by_z_size: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_z_index = 0;
         let mut remaining_height = self.z_size;
         let mut layers = Vec::new();
@@ -97,15 +104,15 @@ impl<B: Brick> Chunk<B> {
             }
         }
 
-        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(layer, z_index)| {
-            let sizes = &bricks_by_z_size[&layer][..];
-            Chunk::<B>::reduce_single_layer(sizes, self.x_size, &mut self.ys_included[..])
+        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(z_size, z_index)| {
+            let sizes = &bricks_by_z_size[&z_size];
+            Chunk::<B>::reduce_single_layer(sizes, self.x_size, self.ys_included.clone())
                 .into_iter()
-                .map(move |brick_index| PlacedBrick {
-                    x: self.x + brick_index.x,
-                    y: self.y + brick_index.y,
+                .map(move |placed_brick| PlacedBrick {
+                    x: self.x + placed_brick.x,
+                    y: self.y + placed_brick.y,
                     z: z_index,
-                    brick: bricks[brick_index.index],
+                    brick: placed_brick.brick,
                 })
         }).collect();
 
@@ -123,7 +130,7 @@ impl<B: Brick> Chunk<B> {
         }
     }
 
-    fn reduce_single_layer(sizes: &[Dimension], x_size: u16, ys_included_by_x: &mut [BTreeSet<u16>]) -> Vec<BrickIndex> {
+    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], x_size: u16, mut ys_included_by_x: Vec<BTreeSet<u16>>) -> Vec<LayerPlacedBrick<B>> {
         let mut bricks = Vec::new();
 
         for x in 0..x_size {
@@ -133,14 +140,11 @@ impl<B: Brick> Chunk<B> {
                 let ys_included = &ys_included_by_x[x_index];
 
                 if let Some(&y) = ys_included.first() {
-                    for brick_index in 0..sizes.len() {
-                        let brick = &sizes[brick_index];
-
-                        // need to check that at least one fits
-                        if Chunk::<B>::fits(x, y, brick.x_size, brick.y_size, ys_included_by_x) {
-                            Chunk::<B>::remove_brick(x, y, brick.x_size, brick.y_size, ys_included_by_x);
-                            bricks.push(BrickIndex {
-                                index: brick_index,
+                    for size in sizes {
+                        if Chunk::<B>::fits(x, y, size.x_size(), size.y_size(), &ys_included_by_x) {
+                            Chunk::<B>::remove_brick(x, y, size.x_size(), size.y_size(), &mut ys_included_by_x);
+                            bricks.push(LayerPlacedBrick {
+                                brick: size.brick,
                                 x,
                                 y,
                             })
@@ -278,7 +282,7 @@ impl<B: Brick> Mosaic<B> {
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Mosaic<B> {
-        let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<Dimension>>> = bricks.iter()
+        let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(HashMap::new(), |mut partitions, brick| {
                 let unit_brick = assert_unit_brick(brick.unit_brick());
                 partitions.entry(unit_brick).or_insert_with(|| Vec::new()).push(brick);
@@ -291,14 +295,14 @@ impl<B: Brick> Mosaic<B> {
         let chunks = self.chunks.into_iter()
             .map(|chunk| {
                 let bricks_by_z_size = &bricks_by_z_size[&chunk.unit_brick];
-                chunk.reduce_bricks(bricks, bricks_by_z_size)
+                chunk.reduce_bricks(bricks_by_z_size)
             })
             .collect();
 
         Mosaic { chunks }
     }
 
-    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<Dimension>> {
+    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
             partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
             partitions
@@ -306,8 +310,8 @@ impl<B: Brick> Mosaic<B> {
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
             .map(|(z_size, bricks)| {
-                let mut sizes: Vec<Dimension> = bricks.into_iter()
-                    .map(|brick| Dimension { x_size: brick.x_size(), y_size: brick.y_size() })
+                let mut sizes: Vec<AreaSortedBrick<B>> = bricks.into_iter()
+                    .map(|&brick| AreaSortedBrick { brick })
                     .collect();
                 sizes.sort();
 
