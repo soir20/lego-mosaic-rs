@@ -18,7 +18,6 @@ pub trait Brick: Copy + Hash + Eq {
     fn unit_brick(&self) -> Self;
 }
 
-#[derive(Clone)]
 struct Dimension {
     x_size: u8,
     y_size: u8
