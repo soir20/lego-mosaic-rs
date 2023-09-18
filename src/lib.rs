@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
 use boolvec::BoolVec;
 use image::{DynamicImage, GenericImageView, Pixel};
@@ -96,7 +96,7 @@ struct BrickIndex {
 }
 
 struct Chunk<U, B> {
-    brick_type: U,
+    unit_brick: U,
     color: Color,
     x: u16,
     y: u16,
@@ -108,7 +108,6 @@ struct Chunk<U, B> {
     bricks: Vec<(u16, u16, u16, B)>
 }
 
-// can't restrict unit brick type
 impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
     fn reduce_bricks(&self, bricks: &[B]) {
         let bricks_by_z_size: HashMap<U, BTreeMap<u16, Vec<Dimension>>> = bricks.iter()
@@ -202,13 +201,13 @@ impl<U: UnitBrick, B: Brick<UnitBrick=U>> Chunk<U, B> {
     }
 }
 
-/*pub struct Mosaic<P> {
-    chunks: Vec<Chunk<P>>
+pub struct Mosaic<U, B> {
+    chunks: Vec<Chunk<U, B>>
 }
 
-impl<P: Copy> Mosaic<P> {
+impl<U: UnitBrick, B: Brick<UnitBrick=U>> Mosaic<U, B> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], brick: P) -> Self {
+    pub fn from_image(image: DynamicImage, palette: &[Color], brick: U) -> Self {
         let raw_colors: Pixels<Srgba<u8>> = image.into();
         let colors = raw_colors.with_palette(palette);
 
@@ -218,8 +217,6 @@ impl<P: Copy> Mosaic<P> {
 
         let mut visited = BoolVec::with_capacity(area);
         let mut queue = VecDeque::new();
-        let mut chunk_pos = HashSet::new();
-
         let mut chunks = Vec::new();
 
         for start_y in 0..y_size {
@@ -231,6 +228,9 @@ impl<P: Copy> Mosaic<P> {
                 let start_color = colors.value(start_x, start_y);
                 queue.push_back((start_x, start_y));
 
+                let mut bricks = Vec::new();
+                let mut ys_included = Vec::new();
+
                 let mut min_x = start_x;
                 let mut min_y = start_y;
                 let mut max_x = start_x;
@@ -239,25 +239,29 @@ impl<P: Copy> Mosaic<P> {
                 while !queue.is_empty() {
                     let (x, y) = queue.pop_front().unwrap();
                     visited.set(y * x_size + x, true);
-                    chunk_pos.insert((x, y));
+
+                    bricks.push(brick);
+                    ys_included.resize(ys_included.len().max(x), BTreeSet::new());
+                    ys_included[x].insert(x as u16);
+
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
                     max_y = min_y.max(y);
 
-                    if x > 0 && is_new_pos::<P>(&visited, &colors, x - 1, y, x_size, start_color) {
+                    if x > 0 && is_new_pos::<B>(&visited, &colors, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
                     }
 
-                    if x < x_size - 1 && is_new_pos::<P>(&visited, &colors, x + 1, y, x_size, start_color) {
+                    if x < x_size - 1 && is_new_pos::<B>(&visited, &colors, x + 1, y, x_size, start_color) {
                         queue.push_back((x + 1, y));
                     }
 
-                    if y > 0 && is_new_pos::<P>(&visited, &colors, x, y - 1, x_size, start_color) {
+                    if y > 0 && is_new_pos::<B>(&visited, &colors, x, y - 1, x_size, start_color) {
                         queue.push_back((x, y - 1));
                     }
 
-                    if y < y_size - 1 && is_new_pos::<P>(&visited, &colors, x, y + 1, x_size, start_color) {
+                    if y < y_size - 1 && is_new_pos::<B>(&visited, &colors, x, y + 1, x_size, start_color) {
                         queue.push_back((x, y + 1));
                     }
                 }
@@ -265,30 +269,19 @@ impl<P: Copy> Mosaic<P> {
                 let chunk_x_size = max_x - min_x + 1;
                 let chunk_y_size = max_y - min_y + 1;
 
-                let mut excluded_xs = vec![BTreeSet::new(); chunk_y_size];
-                let mut excluded_ys = vec![BTreeSet::new(); chunk_x_size];
-
-                for y in min_y..=max_y {
-                    for x in min_x..=max_x {
-                        if !chunk_pos.contains(&(x, y)) {
-                            excluded_xs[y].insert(x as u32);
-                            excluded_ys[x].insert(y as u32);
-                        }
-                    }
-                }
-
                 chunks.push(Chunk {
-                    brick,
+                    unit_brick: brick.unit_brick(),
                     color: start_color,
-                    x: min_x as u32,
-                    y: min_y as u32,
-                    x_size: chunk_x_size as u32,
-                    y_size: chunk_y_size as u32,
+                    x: min_x as u16,
+                    y: min_y as u16,
+                    z: 0,
+                    x_size: chunk_x_size as u16,
+                    y_size: chunk_y_size as u16,
                     z_size: 1,
-                    excluded_xs,
-                    excluded_ys
+                    ys_included,
+                    bricks,
                 });
-                chunk_pos.clear();
+                bricks.clear();
             }
         }
 
@@ -429,4 +422,4 @@ fn color_as_key(color: Color) -> u64 {
     key |= (color.blue as u64) << 16;
     key |= color.alpha as u64;
     key
-}*/
+}
