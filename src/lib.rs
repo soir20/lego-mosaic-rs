@@ -186,7 +186,7 @@ pub struct Mosaic<B> {
 
 impl<B: Brick> Mosaic<B> {
 
-    pub fn from_image(image: DynamicImage, palette: &[Color], unit_brick: B) -> Self {
+    pub fn from_image(image: &DynamicImage, palette: &[Color], unit_brick: B) -> Self {
         assert_unit_brick(unit_brick);
 
         let raw_colors: Pixels<Srgba<u8>> = image.into();
@@ -196,7 +196,7 @@ impl<B: Brick> Mosaic<B> {
         let x_size = colors.x_size;
         let y_size = area / x_size;
 
-        let mut visited = BoolVec::with_capacity(area);
+        let mut visited = BoolVec::filled_with(area, false);
         let mut queue = VecDeque::new();
         let mut chunks = Vec::new();
 
@@ -219,6 +219,10 @@ impl<B: Brick> Mosaic<B> {
 
                 while !queue.is_empty() {
                     let (x, y) = queue.pop_front().unwrap();
+
+                    if was_visited(&mut visited, x, y, x_size) {
+                        continue;
+                    }
                     visited.set(y * x_size + x, true);
 
                     bricks.push(PlacedBrick {
@@ -227,7 +231,7 @@ impl<B: Brick> Mosaic<B> {
                         z: 0,
                         brick: unit_brick,
                     });
-                    ys_included.resize(ys_included.len().max(x), BTreeSet::new());
+                    ys_included.resize(ys_included.len().max(x + 1), BTreeSet::new());
                     ys_included[x].insert(x as u16);
 
                     min_x = min_x.min(x);
@@ -333,8 +337,8 @@ impl<T: Copy> Pixels<T> {
     }
 }
 
-impl From<DynamicImage> for Pixels<Srgba<u8>> {
-    fn from(image: DynamicImage) -> Self {
+impl From<&DynamicImage> for Pixels<Srgba<u8>> {
+    fn from(image: &DynamicImage) -> Self {
         let x_size = image.width() as usize;
         let y_size = image.height() as usize;
         let mut colors = Vec::with_capacity(x_size * y_size);
