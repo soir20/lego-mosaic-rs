@@ -158,9 +158,14 @@ impl<B: Brick> Chunk<B> {
     }
 
     fn fits(x: u16, y: u16, x_size: u8, y_size: u8, ys_included_by_x: &[BTreeSet<u16>]) -> bool {
+        let max_x = x + x_size as u16;
         let max_y = y + y_size as u16;
 
-        for test_x in x..(x + x_size as u16) {
+        if max_x as usize > ys_included_by_x.len() {
+            return false;
+        }
+
+        for test_x in x..max_x {
             if ys_included_by_x[test_x as usize].range(y..max_y).count() < y_size as usize {
                 return false;
             }
@@ -236,7 +241,7 @@ impl<B: Brick> Mosaic<B> {
                         brick: unit_brick,
                     });
                     ys_included.resize(ys_included.len().max(x + 1), BTreeSet::new());
-                    ys_included[x].insert(x as u16);
+                    ys_included[x].insert(y as u16);
 
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
