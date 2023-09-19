@@ -218,9 +218,7 @@ impl<B: Brick> Mosaic<B> {
                 let start_color = colors.value(start_x, start_y);
                 queue.push_back((start_x, start_y));
 
-                let mut bricks = Vec::new();
-                let mut ys_included = Vec::new();
-
+                let mut coordinates = Vec::new();
                 let mut min_x = start_x;
                 let mut min_y = start_y;
                 let mut max_x = start_x;
@@ -234,14 +232,7 @@ impl<B: Brick> Mosaic<B> {
                     }
                     visited.set(y * x_size + x, true);
 
-                    bricks.push(PlacedBrick {
-                        x: x as u16,
-                        y: y as u16,
-                        z: 0,
-                        brick: unit_brick,
-                    });
-                    ys_included.resize(ys_included.len().max(x + 1), BTreeSet::new());
-                    ys_included[x].insert(y as u16);
+                    coordinates.push((x, y));
 
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
@@ -267,6 +258,22 @@ impl<B: Brick> Mosaic<B> {
 
                 let chunk_x_size = max_x - min_x + 1;
                 let chunk_y_size = max_y - min_y + 1;
+                let mut bricks = Vec::with_capacity(coordinates.len());
+                let mut ys_included = vec![BTreeSet::new(); chunk_x_size];
+
+                for (x, y) in coordinates {
+                    let rel_x = x - min_x;
+                    let rel_y = y - min_y;
+
+                    bricks.push(PlacedBrick {
+                        x: rel_x as u16,
+                        y: rel_y as u16,
+                        z: 0,
+                        brick: unit_brick,
+                    });
+
+                    ys_included[rel_x].insert(rel_y as u16);
+                }
 
                 chunks.push(Chunk {
                     unit_brick,
