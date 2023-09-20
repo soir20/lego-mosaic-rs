@@ -40,7 +40,7 @@ impl<B: Brick> Eq for AreaSortedBrick<B> {}
 
 impl<B: Brick> PartialEq<Self> for AreaSortedBrick<B> {
     fn eq(&self, other: &Self) -> bool {
-        self.x_size() == other.x_size() && self.y_size() == other.y_size()
+        self.brick == other.brick
     }
 }
 
