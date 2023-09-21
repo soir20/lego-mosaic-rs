@@ -81,13 +81,33 @@ struct Chunk<B> {
     y: u16,
     z: u16,
     x_size: u16,
-    y_size: u16,
     z_size: u16,
     ys_included: Vec<BTreeSet<u16>>,
     bricks: Vec<PlacedBrick<B>>
 }
 
 impl<B: Brick> Chunk<B> {
+
+    fn raise(mut self, new_z_size: u16) -> Self {
+        assert!(self.z_size <= new_z_size);
+        let new_layers = new_z_size - self.z_size;
+
+        for x in 0..self.x_size {
+            for &y in self.ys_included[x as usize].iter() {
+                for z in 0..new_layers {
+                    self.bricks.push(PlacedBrick {
+                        x,
+                        y,
+                        z,
+                        brick: self.unit_brick,
+                    });
+                }
+            }
+
+        }
+
+        self
+    }
 
     fn reduce_bricks(self, bricks_by_z_size: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_z_index = 0;
@@ -123,7 +143,6 @@ impl<B: Brick> Chunk<B> {
             y: self.y,
             z: self.z,
             x_size: self.x_size,
-            y_size: self.y_size,
             z_size: self.z_size,
             ys_included: self.ys_included,
             bricks,
@@ -222,7 +241,6 @@ impl<B: Brick> Mosaic<B> {
                 let mut min_x = start_x;
                 let mut min_y = start_y;
                 let mut max_x = start_x;
-                let mut max_y = start_y;
 
                 while !queue.is_empty() {
                     let (x, y) = queue.pop_front().unwrap();
@@ -237,7 +255,6 @@ impl<B: Brick> Mosaic<B> {
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
-                    max_y = min_y.max(y);
 
                     if x > 0 && is_new_pos::<B>(&visited, &colors, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
@@ -257,7 +274,6 @@ impl<B: Brick> Mosaic<B> {
                 }
 
                 let chunk_x_size = max_x - min_x + 1;
-                let chunk_y_size = max_y - min_y + 1;
                 let mut bricks = Vec::with_capacity(coordinates.len());
                 let mut ys_included = vec![BTreeSet::new(); chunk_x_size];
 
@@ -282,7 +298,6 @@ impl<B: Brick> Mosaic<B> {
                     y: min_y as u16,
                     z: 0,
                     x_size: chunk_x_size as u16,
-                    y_size: chunk_y_size as u16,
                     z_size: 1,
                     ys_included,
                     bricks,
@@ -470,4 +485,106 @@ fn assert_unit_brick<B: Brick>(brick: B) -> B {
     assert_eq!(1, brick.z_size());
 
     brick
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+    use image::imageops::FilterType;
+    use super::*;
+
+    struct TestBrick {
+        name: &'static str,
+        x_size: u8,
+        y_size: u8,
+        z_size: u8,
+    }
+
+    impl Copy for TestBrick {}
+
+    impl Clone for TestBrick {
+        fn clone(&self) -> Self {
+            TestBrick {
+                name: self.name.clone(),
+                x_size: self.x_size,
+                y_size: self.y_size,
+                z_size: self.z_size,
+            }
+        }
+    }
+
+    impl Hash for TestBrick {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.name.hash(state)
+        }
+    }
+
+    impl Eq for TestBrick {}
+
+    impl PartialEq<Self> for TestBrick {
+        fn eq(&self, other: &Self) -> bool {
+            self.name == other.name
+        }
+    }
+
+    impl Brick for TestBrick {
+        fn x_size(&self) -> u8 {
+            self.x_size
+        }
+
+        fn y_size(&self) -> u8 {
+            self.y_size
+        }
+
+        fn z_size(&self) -> u8 {
+            self.z_size
+        }
+
+        fn unit_brick(&self) -> Self {
+            TestBrick {
+                name: "1x1x1",
+                x_size: 1,
+                y_size: 1,
+                z_size: 1,
+            }
+        }
+    }
+
+    #[test]
+    fn test() {
+        let img = image::open("dragon.webp").unwrap();
+        let resized = img.resize_exact(20, 20, FilterType::CatmullRom);
+
+        let palette = vec![
+            Color::new(255, 0, 0, 255),
+            Color::new(0, 255, 0, 255),
+            Color::new(0, 0, 255, 255),
+        ];
+
+        let brick2x2x1 = TestBrick {
+            name: "2x2x1",
+            x_size: 2,
+            y_size: 2,
+            z_size: 1,
+        };
+        let dup_brick = TestBrick {
+            name: "dup",
+            x_size: 2,
+            y_size: 2,
+            z_size: 1,
+        };
+        let brick1x1x1 = brick2x2x1.unit_brick();
+
+        let mut mosaic = Mosaic::<TestBrick>::from_image(&resized, &palette, brick1x1x1);
+        mosaic = mosaic.reduce_bricks(&vec![brick1x1x1, brick2x2x1, dup_brick]);
+
+        for chunk in mosaic.chunks {
+            println!("CHUNK {:?}", chunk.color);
+            for brick in chunk.bricks {
+                println!("x={}, y={}, z={}, x_size={}, y_size={}, z_size={}", brick.x, brick.y, brick.z, brick.brick.x_size, brick.brick.y_size, brick.brick.z_size);
+            }
+        }
+
+        resized.save("dragon-small.png").unwrap();
+    }
 }
