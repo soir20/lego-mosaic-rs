@@ -88,7 +88,7 @@ struct Chunk<B> {
 
 impl<B: Brick> Chunk<B> {
 
-    fn raise(mut self, new_z_size: u16) -> Self {
+    pub fn raise(mut self, new_z_size: u16) -> Self {
         assert!(self.z_size <= new_z_size);
         let new_layers = new_z_size - self.z_size;
 
@@ -109,7 +109,7 @@ impl<B: Brick> Chunk<B> {
         self
     }
 
-    fn reduce_bricks(self, bricks_by_z_size: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
+    pub fn reduce_bricks(self, bricks_by_z_size: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_z_index = 0;
         let mut remaining_height = self.z_size;
         let mut layers = Vec::new();
@@ -363,7 +363,7 @@ struct Pixels<T> {
 }
 
 impl<T: Copy> Pixels<T> {
-    fn value(&self, x: usize, y: usize) -> T {
+    pub fn value(&self, x: usize, y: usize) -> T {
         self.values_by_row[y * self.x_size + x]
     }
 }
