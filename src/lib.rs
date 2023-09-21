@@ -88,22 +88,52 @@ struct Chunk<B> {
 
 impl<B: Brick> Chunk<B> {
 
-    pub fn raise(mut self, new_z_size: u16) -> Self {
-        assert!(self.z_size <= new_z_size);
-        let new_layers = new_z_size - self.z_size;
+    pub fn set_z_size(mut self, new_z_size: u16) -> Self {
+        let new_layers = new_z_size.abs_diff(self.z_size);
 
-        for x in 0..self.x_size {
-            for &y in self.ys_included[x as usize].iter() {
-                for z in 0..new_layers {
-                    self.bricks.push(PlacedBrick {
-                        x,
-                        y,
-                        z,
-                        brick: self.unit_brick,
-                    });
+        if self.z_size > new_z_size {
+            let new_min_z = new_layers;
+            self.bricks = self.bricks.into_iter()
+                .flat_map(|brick| {
+                    if brick.z >= new_min_z {
+                        return vec![brick];
+                    }
+
+                    let brick_top_z = brick.z + brick.brick.z_size() as u16;
+                    let zs_to_replace = brick_top_z - new_min_z;
+                    let mut new_bricks = Vec::with_capacity(
+                        zs_to_replace as usize * brick.brick.x_size() as usize * brick.brick.y_size() as usize
+                    );
+
+                    for z in new_min_z..brick_top_z {
+                        for x in brick.x..(brick.x + brick.brick.x_size() as u16) {
+                            for y in brick.y..(brick.y + brick.brick.y_size() as u16) {
+                                new_bricks.push(PlacedBrick {
+                                    x,
+                                    y,
+                                    z,
+                                    brick: self.unit_brick,
+                                });
+                            }
+                        }
+                    }
+
+                    return new_bricks;
+                })
+                .collect();
+        }
+
+        for z in 0..new_layers {
+            for x in 0..self.x_size {
+                for &y in self.ys_included[x as usize].iter() {
+                        self.bricks.push(PlacedBrick {
+                            x,
+                            y,
+                            z,
+                            brick: self.unit_brick,
+                        });
                 }
             }
-
         }
 
         self
@@ -308,7 +338,7 @@ impl<B: Brick> Mosaic<B> {
         Mosaic { chunks }
     }
 
-    pub fn reduce_bricks(self, bricks: &[B]) -> Mosaic<B> {
+    pub fn reduce_bricks(self, bricks: &[B]) -> Self {
         let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(HashMap::new(), |mut partitions, brick| {
                 let unit_brick = assert_unit_brick(brick.unit_brick());
@@ -329,6 +359,54 @@ impl<B: Brick> Mosaic<B> {
         Mosaic { chunks }
     }
 
+    pub fn make_3d(self, layers: u16, flip: bool) -> Self {
+        let height_map = self.height_map(layers, flip);
+        Mosaic {
+            chunks: self.chunks.into_iter()
+                .map(|chunk| {
+                    let key = color_as_key(chunk.color);
+                    chunk.set_z_size(height_map[&key])
+                })
+                .collect()
+        }
+    }
+
+    fn height_map(&self, layers: u16, flip: bool) -> HeightMap {
+        if layers == 0 {
+            return HeightMap::new();
+        }
+
+        let (min_luma, max_luma) = self.chunks.iter()
+            .map(|chunk| {
+                let srgba_f32: Srgba<f32> = chunk.color.into_format();
+                srgba_f32.relative_luminance().luma
+            })
+            .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
+
+        let range = max_luma - min_luma;
+        let max_layer_index = layers - 1;
+
+        let mut height_map = HeightMap::new();
+
+        self.chunks.iter().for_each(|chunk| {
+            let color = chunk.color;
+            let entry = height_map.entry(color_as_key(color));
+            entry.or_insert_with(|| {
+                let srgba_f32: Srgba<f32> = color.into_format();
+                let luma = srgba_f32.relative_luminance().luma;
+                let mut range_rel_luma = (luma - min_luma) / range;
+                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
+
+                /* Layers must be u16 because the max integer a 32-bit float can represent
+                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
+                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
+
+            });
+        });
+
+        height_map
+    }
+
     fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
             partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
@@ -347,6 +425,16 @@ impl<B: Brick> Mosaic<B> {
             .collect()
     }
 
+}
+
+type HeightMap = HashMap<u64, u16>;
+fn color_as_key(color: Color) -> u64 {
+    let mut key = 0u64;
+    key |= (color.red as u64) << 48;
+    key |= (color.green as u64) << 32;
+    key |= (color.blue as u64) << 16;
+    key |= color.alpha as u64;
+    key
 }
 
 fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
@@ -430,53 +518,6 @@ impl Pixels<Srgba<u8>> {
         let distance = component1.abs_diff(component2) as u32;
         distance * distance
     }
-}
-
-type HeightMap = HashMap<u64, u16>;
-impl Pixels<Color> {
-    pub fn height_map(&self, layers: u16, flip: bool) -> HeightMap {
-        if layers == 0 {
-            return HeightMap::new();
-        }
-
-        let (min_luma, max_luma) = self.values_by_row.iter()
-            .map(|color| {
-                let srgba_f32: Srgba<f32> = color.into_format();
-                srgba_f32.relative_luminance().luma
-            })
-            .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
-
-        let range = max_luma - min_luma;
-        let max_layer_index = layers - 1;
-
-        let mut height_map = HeightMap::new();
-
-        self.values_by_row.iter().for_each(|color| {
-            let entry = height_map.entry(color_as_key(*color));
-            entry.or_insert_with(|| {
-                let srgba_f32: Srgba<f32> = color.into_format();
-                let luma = srgba_f32.relative_luminance().luma;
-                let mut range_rel_luma = (luma - min_luma) / range;
-                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
-
-                /* Layers must be u16 because the max integer a 32-bit float can represent
-                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
-
-            });
-        });
-
-        height_map
-    }
-}
-
-fn color_as_key(color: Color) -> u64 {
-    let mut key = 0u64;
-    key |= (color.red as u64) << 48;
-    key |= (color.green as u64) << 32;
-    key |= (color.blue as u64) << 16;
-    key |= color.alpha as u64;
-    key
 }
 
 fn assert_unit_brick<B: Brick>(brick: B) -> B {
