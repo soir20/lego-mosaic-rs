@@ -19,16 +19,23 @@ pub trait Brick: Copy + Hash + Eq {
 }
 
 struct AreaSortedBrick<B> {
-    brick: B
+    brick: B,
+    rotate: bool
 }
 
 impl<B: Brick> AreaSortedBrick<B> {
     fn x_size(&self) -> u8 {
-        self.brick.x_size()
+        match self.rotate {
+            true => self.brick.y_size(),
+            false => self.brick.x_size()
+        }
     }
 
     fn y_size(&self) -> u8 {
-        self.brick.y_size()
+        match self.rotate {
+            true => self.brick.x_size(),
+            false => self.brick.y_size()
+        }
     }
 
     fn area(&self) -> u16 {
@@ -64,14 +71,16 @@ impl<B: Brick> Ord for AreaSortedBrick<B> {
 struct LayerPlacedBrick<B> {
     x: u16,
     y: u16,
-    brick: B
+    brick: B,
+    rotate: bool
 }
 
 struct PlacedBrick<B> {
     x: u16,
     y: u16,
     z: u16,
-    brick: B
+    brick: B,
+    rotate: bool
 }
 
 struct Chunk<B> {
@@ -113,6 +122,7 @@ impl<B: Brick> Chunk<B> {
                                     y,
                                     z,
                                     brick: self.unit_brick,
+                                    rotate: false
                                 });
                             }
                         }
@@ -131,6 +141,7 @@ impl<B: Brick> Chunk<B> {
                             y,
                             z,
                             brick: self.unit_brick,
+                            rotate: false
                         });
                 }
             }
@@ -163,6 +174,7 @@ impl<B: Brick> Chunk<B> {
                     y: self.y + placed_brick.y,
                     z: z_index,
                     brick: placed_brick.brick,
+                    rotate: placed_brick.rotate
                 })
         }).collect();
 
@@ -196,6 +208,7 @@ impl<B: Brick> Chunk<B> {
                                 brick: size.brick,
                                 x,
                                 y,
+                                rotate: size.rotate
                             })
                         }
                     }
@@ -316,6 +329,7 @@ impl<B: Brick> Mosaic<B> {
                         y: rel_y as u16,
                         z: 0,
                         brick: unit_brick,
+                        rotate: false
                     });
 
                     ys_included[rel_x].insert(rel_y as u16);
@@ -415,9 +429,15 @@ impl<B: Brick> Mosaic<B> {
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
             .map(|(z_size, bricks)| {
-                let mut sizes: Vec<AreaSortedBrick<B>> = bricks.into_iter()
-                    .map(|&brick| AreaSortedBrick { brick })
-                    .collect();
+                let mut sizes = Vec::with_capacity(bricks.len());
+                for &brick in bricks {
+                    sizes.push(AreaSortedBrick { brick, rotate: false });
+
+                    if brick.x_size() != brick.y_size() {
+                        sizes.push(AreaSortedBrick { brick, rotate: true });
+                    }
+                }
+
                 sizes.sort();
 
                 (z_size as u16, sizes)
