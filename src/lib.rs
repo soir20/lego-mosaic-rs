@@ -105,16 +105,26 @@ impl<B: Brick> Chunk<B> {
             self.bricks = self.bricks.into_iter()
                 .flat_map(|brick| {
                     if brick.z >= new_min_z {
-                        return vec![brick];
+                        return vec![PlacedBrick {
+                            x: brick.x,
+                            y: brick.y,
+                            z: brick.z - new_min_z,
+                            brick: brick.brick,
+                            rotate: brick.rotate,
+                        }];
                     }
 
-                    let brick_top_z = brick.z + brick.brick.z_size() as u16;
-                    let zs_to_replace = brick_top_z - new_min_z;
+                    let brick_z_above = brick.z + brick.brick.z_size() as u16;
+                    if brick_z_above <= new_min_z {
+                        return vec![];
+                    }
+
+                    let zs_to_replace = brick_z_above - new_min_z;
                     let mut new_bricks = Vec::with_capacity(
                         zs_to_replace as usize * brick.brick.x_size() as usize * brick.brick.y_size() as usize
                     );
 
-                    for z in new_min_z..brick_top_z {
+                    for z in 0..(brick_z_above - new_min_z) {
                         for x in brick.x..(brick.x + brick.brick.x_size() as u16) {
                             for y in brick.y..(brick.y + brick.brick.y_size() as u16) {
                                 new_bricks.push(PlacedBrick {
@@ -131,11 +141,10 @@ impl<B: Brick> Chunk<B> {
                     return new_bricks;
                 })
                 .collect();
-        }
-
-        for z in 0..new_layers {
-            for x in 0..self.x_size {
-                for &y in self.ys_included[x as usize].iter() {
+        } else {
+            for z in self.z_size..(self.z_size + new_layers) {
+                for x in 0..self.x_size {
+                    for &y in self.ys_included[x as usize].iter() {
                         self.bricks.push(PlacedBrick {
                             x,
                             y,
@@ -143,9 +152,12 @@ impl<B: Brick> Chunk<B> {
                             brick: self.unit_brick,
                             rotate: false
                         });
+                    }
                 }
             }
         }
+
+        self.z_size = new_z_size;
 
         self
     }
