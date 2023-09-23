@@ -407,7 +407,7 @@ impl<B: Brick> Mosaic<B> {
                 let srgba_f32: Srgba<f32> = chunk.color.into_format();
                 srgba_f32.relative_luminance().luma
             })
-            .fold((0.0f32, 1.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
+            .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
 
         let range = max_luma - min_luma;
         let max_layer_index = layers - 1;
