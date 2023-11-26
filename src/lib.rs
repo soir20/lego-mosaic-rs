@@ -6,7 +6,8 @@ use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
-pub type Color = Srgba<u8>;
+type RawColor = Srgba<u8>;
+pub trait Color: Copy + Default + Eq + Hash + Into<Srgba<u8>> {}
 
 pub trait Brick: Copy + Hash + Eq {
     fn x_size(&self) -> u8;
@@ -83,9 +84,9 @@ struct PlacedBrick<B> {
     rotate: bool
 }
 
-struct Chunk<B> {
+struct Chunk<B, C> {
     unit_brick: B,
-    color: Color,
+    color: C,
     x: u16,
     y: u16,
     z: u16,
@@ -95,7 +96,7 @@ struct Chunk<B> {
     bricks: Vec<PlacedBrick<B>>
 }
 
-impl<B: Brick> Chunk<B> {
+impl<B: Brick, C: Color> Chunk<B, C> {
 
     pub fn set_z_size(mut self, new_z_size: u16) -> Self {
         let new_layers = new_z_size.abs_diff(self.z_size);
@@ -179,7 +180,7 @@ impl<B: Brick> Chunk<B> {
 
         let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(z_size, z_index)| {
             let sizes = &bricks_by_z_size[&z_size];
-            Chunk::<B>::reduce_single_layer(sizes, self.x_size, self.ys_included.clone())
+            Chunk::<B, C>::reduce_single_layer(sizes, self.x_size, self.ys_included.clone())
                 .into_iter()
                 .map(move |placed_brick| PlacedBrick {
                     x: self.x + placed_brick.x,
@@ -214,8 +215,8 @@ impl<B: Brick> Chunk<B> {
 
                 if let Some(&y) = ys_included.first() {
                     for size in sizes {
-                        if Chunk::<B>::fits(x, y, size.x_size(), size.y_size(), &ys_included_by_x) {
-                            Chunk::<B>::remove_brick(x, y, size.x_size(), size.y_size(), &mut ys_included_by_x);
+                        if Chunk::<B, C>::fits(x, y, size.x_size(), size.y_size(), &ys_included_by_x) {
+                            Chunk::<B, C>::remove_brick(x, y, size.x_size(), size.y_size(), &mut ys_included_by_x);
                             bricks.push(LayerPlacedBrick {
                                 brick: size.brick,
                                 x,
@@ -263,16 +264,16 @@ impl<B: Brick> Chunk<B> {
     }
 }
 
-pub struct Mosaic<B> {
-    chunks: Vec<Chunk<B>>
+pub struct Mosaic<B, C> {
+    chunks: Vec<Chunk<B, C>>
 }
 
-impl<B: Brick> Mosaic<B> {
+impl<B: Brick, C: Color> Mosaic<B, C> {
 
-    pub fn from_image(image: &DynamicImage, palette: &[Color], unit_brick: B) -> Self {
+    pub fn from_image(image: &DynamicImage, palette: &[C], unit_brick: B) -> Self {
         assert_unit_brick(unit_brick);
 
-        let raw_colors: Pixels<Srgba<u8>> = image.into();
+        let raw_colors: Pixels<RawColor> = image.into();
         let colors = raw_colors.with_palette(palette);
 
         let area = colors.values_by_row.len();
@@ -311,19 +312,19 @@ impl<B: Brick> Mosaic<B> {
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
 
-                    if x > 0 && is_new_pos::<B>(&visited, &colors, x - 1, y, x_size, start_color) {
+                    if x > 0 && is_new_pos::<C>(&visited, &colors, x - 1, y, x_size, start_color) {
                         queue.push_back((x - 1, y));
                     }
 
-                    if x < x_size - 1 && is_new_pos::<B>(&visited, &colors, x + 1, y, x_size, start_color) {
+                    if x < x_size - 1 && is_new_pos::<C>(&visited, &colors, x + 1, y, x_size, start_color) {
                         queue.push_back((x + 1, y));
                     }
 
-                    if y > 0 && is_new_pos::<B>(&visited, &colors, x, y - 1, x_size, start_color) {
+                    if y > 0 && is_new_pos::<C>(&visited, &colors, x, y - 1, x_size, start_color) {
                         queue.push_back((x, y - 1));
                     }
 
-                    if y < y_size - 1 && is_new_pos::<B>(&visited, &colors, x, y + 1, x_size, start_color) {
+                    if y < y_size - 1 && is_new_pos::<C>(&visited, &colors, x, y + 1, x_size, start_color) {
                         queue.push_back((x, y + 1));
                     }
                 }
@@ -372,7 +373,7 @@ impl<B: Brick> Mosaic<B> {
                 partitions
             })
             .into_iter()
-            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B>::partition_by_z_size(bricks)))
+            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_z_size(bricks)))
             .collect();
 
         let chunks = self.chunks.into_iter()
@@ -390,21 +391,21 @@ impl<B: Brick> Mosaic<B> {
         Mosaic {
             chunks: self.chunks.into_iter()
                 .map(|chunk| {
-                    let key = color_as_key(chunk.color);
+                    let key = chunk.color;
                     chunk.set_z_size(height_map[&key])
                 })
                 .collect()
         }
     }
 
-    fn height_map(&self, layers: u16, flip: bool) -> HeightMap {
+    fn height_map(&self, layers: u16, flip: bool) -> HeightMap<C> {
         if layers == 0 {
             return HeightMap::new();
         }
 
         let (min_luma, max_luma) = self.chunks.iter()
             .map(|chunk| {
-                let srgba_f32: Srgba<f32> = chunk.color.into_format();
+                let srgba_f32: Srgba<f32> = chunk.color.into().into_format();
                 srgba_f32.relative_luminance().luma
             })
             .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
@@ -416,9 +417,9 @@ impl<B: Brick> Mosaic<B> {
 
         self.chunks.iter().for_each(|chunk| {
             let color = chunk.color;
-            let entry = height_map.entry(color_as_key(color));
+            let entry = height_map.entry(color);
             entry.or_insert_with(|| {
-                let srgba_f32: Srgba<f32> = color.into_format();
+                let srgba_f32: Srgba<f32> = color.into().into_format();
                 let luma = srgba_f32.relative_luminance().luma;
                 let mut range_rel_luma = (luma - min_luma) / range;
                 range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
@@ -459,21 +460,13 @@ impl<B: Brick> Mosaic<B> {
 
 }
 
-type HeightMap = HashMap<u64, u16>;
-fn color_as_key(color: Color) -> u64 {
-    let mut key = 0u64;
-    key |= (color.red as u64) << 48;
-    key |= (color.green as u64) << 32;
-    key |= (color.blue as u64) << 16;
-    key |= color.alpha as u64;
-    key
-}
+type HeightMap<C> = HashMap<C, u16>;
 
 fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
     visited.get(y * x_size + x).unwrap()
 }
 
-fn is_new_pos<P: Copy>(visited: &BoolVec, colors: &Pixels<Color>, x: usize, y: usize, x_size: usize, start_color: Color) -> bool {
+fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, x: usize, y: usize, x_size: usize, start_color: C) -> bool {
     !was_visited(&visited, x, y, x_size) && colors.value(x, y) == start_color
 }
 
@@ -488,7 +481,7 @@ impl<T: Copy> Pixels<T> {
     }
 }
 
-impl From<&DynamicImage> for Pixels<Srgba<u8>> {
+impl From<&DynamicImage> for Pixels<RawColor> {
     fn from(image: &DynamicImage) -> Self {
         let x_size = image.width() as usize;
         let y_size = image.height() as usize;
@@ -511,20 +504,20 @@ impl From<&DynamicImage> for Pixels<Srgba<u8>> {
     }
 }
 
-impl Pixels<Srgba<u8>> {
-    pub fn with_palette(self, palette: &[Color]) -> Pixels<Color> {
+impl Pixels<RawColor> {
+    pub fn with_palette<C: Color>(self, palette: &[C]) -> Pixels<C> {
         let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
         Pixels { values_by_row: new_colors, x_size: self.x_size }
     }
 
-    fn find_similar_color(color: Srgba<u8>, palette: &[Color]) -> Color {
+    fn find_similar_color<C: Color>(color: RawColor, palette: &[C]) -> C {
         let mut best_distance = u32::MAX;
-        let mut best_color = Color::default();
+        let mut best_color = C::default();
 
         for &palette_color in palette {
-            let distance = Self::distance_squared(color, palette_color);
+            let distance = Self::distance_squared(color, palette_color.into());
 
             if distance < best_distance {
                 best_distance = distance;
@@ -535,7 +528,7 @@ impl Pixels<Srgba<u8>> {
         best_color
     }
 
-    fn distance_squared(color1: Srgba<u8>, color2: Srgba<u8>) -> u32 {
+    fn distance_squared(color1: RawColor, color2: RawColor) -> u32 {
 
         // u8 squared -> u16 needed, u16 x 4 -> u32 needed
         // Ex: 255^2 * 4 = 260100
