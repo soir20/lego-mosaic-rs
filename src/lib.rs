@@ -141,7 +141,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                         }
                     }
 
-                    return new_bricks;
+                    new_bricks
                 })
                 .collect();
         } else {
@@ -256,9 +256,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         let max_x = x as usize + x_size as usize;
         let max_y = y + y_size as u16;
 
-        for cur_x in min_x..max_x {
-            let ys_included = &mut ys_included_by_x[cur_x];
-
+        for ys_included in ys_included_by_x.iter_mut().take(max_x).skip(min_x) {
             for cur_y in y..max_y {
                 ys_included.remove(&cur_y);
             }
@@ -288,7 +286,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
         for start_y in 0..y_size {
             for start_x in 0..x_size {
-                if was_visited(&mut visited, start_x, start_y, x_size) {
+                if was_visited(&visited, start_x, start_y, x_size) {
                     continue;
                 }
 
@@ -303,7 +301,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 while !queue.is_empty() {
                     let (x, y) = queue.pop_front().unwrap();
 
-                    if was_visited(&mut visited, x, y, x_size) {
+                    if was_visited(&visited, x, y, x_size) {
                         continue;
                     }
                     visited.set(y * x_size + x, true);
@@ -371,7 +369,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(HashMap::new(), |mut partitions, brick| {
                 let unit_brick = assert_unit_brick(brick.unit_brick());
-                partitions.entry(unit_brick).or_insert_with(|| Vec::new()).push(brick);
+                partitions.entry(unit_brick).or_insert_with(Vec::new).push(brick);
                 partitions
             })
             .into_iter()
@@ -438,7 +436,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
     fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.z_size()).or_insert_with(|| Vec::new()).push(brick);
+            partitions.entry(brick.z_size()).or_insert_with(Vec::new).push(brick);
             partitions
         })
             .into_iter()
@@ -469,7 +467,7 @@ fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
 }
 
 fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, x: usize, y: usize, x_size: usize, start_color: C) -> bool {
-    !was_visited(&visited, x, y, x_size) && colors.value(x, y) == start_color
+    !was_visited(visited, x, y, x_size) && colors.value(x, y) == start_color
 }
 
 struct Pixels<T> {

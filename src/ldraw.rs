@@ -37,9 +37,9 @@ impl Hash for LdrawColor {
     }
 }
 
-impl Into<Srgba<u8>> for LdrawColor {
-    fn into(self) -> Srgba<u8> {
-        self.value
+impl From<LdrawColor> for Srgba<u8> {
+    fn from(color: LdrawColor) -> Self {
+        color.value
     }
 }
 
@@ -209,7 +209,7 @@ const OPAL_TRANS_GREEN: LdrawColor = LdrawColor::new(367, 35, 120, 65, 200);
 const GLITTER_TRANS_BRIGHT_GREEN: LdrawColor = LdrawColor::new(10351, 86, 230, 70, 128);
 const OPAL_TRANS_DARK_BLUE: LdrawColor = LdrawColor::new(10366, 0, 32, 160, 200);
 
-const SOLID_COLORS: &'static [LdrawColor] = &[
+const SOLID_COLORS: &[LdrawColor] = &[
     BLACK,
     BLUE,
     GREEN,
@@ -300,7 +300,7 @@ const SOLID_COLORS: &'static [LdrawColor] = &[
     FABULAND_LIME
 ];
 
-const TRANSLUCENT_COLORS: &'static [LdrawColor] = &[
+const TRANSLUCENT_COLORS: &[LdrawColor] = &[
     TRANS_DARK_BLUE,
     TRANS_GREEN,
     TRANS_BRIGHT_GREEN,
@@ -327,7 +327,7 @@ const TRANSLUCENT_COLORS: &'static [LdrawColor] = &[
     TRANS_LIGHT_BLUE_VIOLET
 ];
 
-const CHROME_COLORS: &'static [LdrawColor] = &[
+const CHROME_COLORS: &[LdrawColor] = &[
     CHROME_ANTIQUE_BRASS,
     CHROME_BLUE,
     CHROME_GREEN,
@@ -337,7 +337,7 @@ const CHROME_COLORS: &'static [LdrawColor] = &[
     CHROME_SILVER
 ];
 
-const PEARLESCENT_COLORS: &'static [LdrawColor] = &[
+const PEARLESCENT_COLORS: &[LdrawColor] = &[
     PEARL_BLACK,
     COPPER,
     PEARL_LIGHT_GREY,
@@ -358,7 +358,7 @@ const PEARLESCENT_COLORS: &'static [LdrawColor] = &[
     PEARL_GOLD
 ];
 
-const METALLIC_COLORS: &'static [LdrawColor] = &[
+const METALLIC_COLORS: &[LdrawColor] = &[
     METALLIC_SILVER,
     METALLIC_GREEN,
     METALLIC_GOLD,
@@ -369,14 +369,14 @@ const METALLIC_COLORS: &'static [LdrawColor] = &[
     METALLIC_LIGHT_PINK
 ];
 
-const MILKY_COLORS: &'static [LdrawColor] = &[
+const MILKY_COLORS: &[LdrawColor] = &[
     MILKY_WHITE,
     GLOW_IN_DARK_OPAQUE,
     GLOW_IN_DARK_TRANS,
     GLOW_IN_DARK_WHITE
 ];
 
-const GLITTER_COLORS: &'static [LdrawColor] = &[
+const GLITTER_COLORS: &[LdrawColor] = &[
     GLITTER_TRANS_DARK_PINK,
     GLITTER_TRANS_CLEAR,
     GLITTER_TRANS_PURPLE,
