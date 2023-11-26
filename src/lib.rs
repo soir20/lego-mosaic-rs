@@ -19,6 +19,8 @@ pub trait Brick: Copy + Hash + Eq {
     fn z_size(&self) -> u8;
 
     fn unit_brick(&self) -> Self;
+
+    fn rotate(&self) -> Self;
 }
 
 struct AreaSortedBrick<B> {
@@ -367,9 +369,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
         let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
-            .fold(HashMap::new(), |mut partitions, brick| {
+            .fold(HashMap::new(), |mut partitions, &brick| {
                 let unit_brick = assert_unit_brick(brick.unit_brick());
-                partitions.entry(unit_brick).or_insert_with(Vec::new).push(brick);
+                let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
+                entry.push(brick);
+
+                if brick.x_size() != brick.y_size() {
+                    entry.push(brick.rotate());
+                }
+
                 partitions
             })
             .into_iter()
@@ -434,7 +442,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         height_map
     }
 
-    fn partition_by_z_size(bricks: Vec<&B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+    fn partition_by_z_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
             partitions.entry(brick.z_size()).or_insert_with(Vec::new).push(brick);
             partitions
@@ -443,7 +451,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
             .map(|(z_size, bricks)| {
                 let mut sizes = Vec::with_capacity(bricks.len());
-                for &brick in bricks {
+                for brick in bricks {
                     sizes.push(AreaSortedBrick { brick, rotate: false });
 
                     if brick.x_size() != brick.y_size() {
