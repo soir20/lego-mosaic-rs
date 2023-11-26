@@ -1,3 +1,5 @@
+mod ldraw;
+
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
