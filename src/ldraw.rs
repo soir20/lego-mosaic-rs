@@ -3,6 +3,8 @@ use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
 use crate::{Brick, Color};
 
+pub type TransformMatrix = TMat4<f32>;
+
 #[derive(Clone, Copy)]
 pub struct LdrawBrick<'a> {
     id: &'a str,
@@ -10,17 +12,33 @@ pub struct LdrawBrick<'a> {
     length: u8,
     width: u8,
     height: u8,
-    transform: TMat4<f32>,
+    transform: TransformMatrix,
     unit_brick: Option<&'a LdrawBrick<'a>>
 }
 
 impl<'a> LdrawBrick<'a> {
-    pub const fn new(id: &'a str, length: u8, width: u8, height: u8, transform: TMat4<f32>, unit_brick: &'a Self) -> Self {
-        LdrawBrick { id, rotated: false, length, width, height, transform, unit_brick: Some(unit_brick) }
+    pub fn new(id: &'a str, length: u8, width: u8, height: u8, transform: TransformMatrix, unit_brick: &'a Self) -> Self {
+        LdrawBrick {
+            id,
+            rotated: false,
+            length,
+            width,
+            height,
+            transform: assert_homogeneous_matrix(transform),
+            unit_brick: Some(unit_brick)
+        }
     }
 
-    pub const fn new_unit(id: &'a str, length: u8, width: u8, height: u8, transform: TMat4<f32>) -> Self {
-        LdrawBrick { id, rotated: false, length, width, height, transform, unit_brick: None }
+    pub fn new_unit(id: &'a str, length: u8, width: u8, height: u8, transform: TransformMatrix) -> Self {
+        LdrawBrick {
+            id,
+            rotated: false,
+            length,
+            width,
+            height,
+            transform: assert_homogeneous_matrix(transform),
+            unit_brick: None
+        }
     }
 }
 
@@ -71,6 +89,14 @@ impl Brick for LdrawBrick<'_> {
             unit_brick: self.unit_brick,
         }
     }
+}
+
+fn assert_homogeneous_matrix(transform: TransformMatrix) -> TransformMatrix {
+    assert_eq!(0f32, transform.m14);
+    assert_eq!(0f32, transform.m24);
+    assert_eq!(0f32, transform.m34);
+    assert_eq!(1f32, transform.m44);
+    transform
 }
 
 #[derive(Copy, Clone, Eq)]
