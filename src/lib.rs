@@ -8,8 +8,11 @@ use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
-type RawColor = Srgba<u8>;
-pub trait Color: Copy + Default + Eq + Hash + Into<Srgba<u8>> {}
+// ====================
+// PUBLIC TRAITS
+// ====================
+
+pub trait Color: Copy + Default + Eq + Hash + Into<RawColor> {}
 
 pub trait Brick: Copy + Hash + Eq {
     fn length(&self) -> u8;
@@ -22,6 +25,244 @@ pub trait Brick: Copy + Hash + Eq {
 
     fn rotate(&self) -> Self;
 }
+
+// ====================
+// PUBLIC STRUCTS
+// ====================
+
+pub struct Mosaic<B, C> {
+    chunks: Vec<Chunk<B, C>>
+}
+
+impl<B: Brick, C: Color> Mosaic<B, C> {
+
+    pub fn from_image(image: &DynamicImage, palette: &[C], unit_brick: B) -> Self {
+        assert_unit_brick(unit_brick);
+
+        let raw_colors: Pixels<RawColor> = image.into();
+        let colors = raw_colors.with_palette(palette);
+
+        let area = colors.values_by_row.len();
+        let x_size = colors.x_size;
+        let y_size = area / x_size;
+
+        let mut visited = BoolVec::filled_with(area, false);
+        let mut queue = VecDeque::new();
+        let mut chunks = Vec::new();
+
+        for start_y in 0..y_size {
+            for start_x in 0..x_size {
+                if was_visited(&visited, start_x, start_y, x_size) {
+                    continue;
+                }
+
+                let start_color = colors.value(start_x, start_y);
+                queue.push_back((start_x, start_y));
+
+                let mut coordinates = Vec::new();
+                let mut min_x = start_x;
+                let mut min_y = start_y;
+                let mut max_x = start_x;
+
+                while !queue.is_empty() {
+                    let (x, y) = queue.pop_front().unwrap();
+
+                    if was_visited(&visited, x, y, x_size) {
+                        continue;
+                    }
+                    visited.set(y * x_size + x, true);
+
+                    coordinates.push((x, y));
+
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+
+                    if x > 0 && is_new_pos::<C>(&visited, &colors, x - 1, y, x_size, start_color) {
+                        queue.push_back((x - 1, y));
+                    }
+
+                    if x < x_size - 1 && is_new_pos::<C>(&visited, &colors, x + 1, y, x_size, start_color) {
+                        queue.push_back((x + 1, y));
+                    }
+
+                    if y > 0 && is_new_pos::<C>(&visited, &colors, x, y - 1, x_size, start_color) {
+                        queue.push_back((x, y - 1));
+                    }
+
+                    if y < y_size - 1 && is_new_pos::<C>(&visited, &colors, x, y + 1, x_size, start_color) {
+                        queue.push_back((x, y + 1));
+                    }
+                }
+
+                let chunk_x_size = max_x - min_x + 1;
+                let mut bricks = Vec::with_capacity(coordinates.len());
+                let mut ys_included = vec![BTreeSet::new(); chunk_x_size];
+
+                for (x, y) in coordinates {
+                    let rel_x = x - min_x;
+                    let rel_y = y - min_y;
+
+                    bricks.push(PlacedBrick {
+                        x: rel_x as u16,
+                        y: rel_y as u16,
+                        z: 0,
+                        brick: unit_brick,
+                        rotate: false
+                    });
+
+                    ys_included[rel_x].insert(rel_y as u16);
+                }
+
+                chunks.push(Chunk {
+                    unit_brick,
+                    color: start_color,
+                    x: min_x as u16,
+                    y: min_y as u16,
+                    z: 0,
+                    x_size: chunk_x_size as u16,
+                    z_size: 1,
+                    ys_included,
+                    bricks,
+                })
+            }
+        }
+
+        Mosaic { chunks }
+    }
+
+    pub fn reduce_bricks(self, bricks: &[B]) -> Self {
+        let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
+            .fold(HashMap::new(), |mut partitions, &brick| {
+                let unit_brick = assert_unit_brick(brick.unit_brick());
+                let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
+                entry.push(brick);
+
+                if brick.length() != brick.width() {
+                    entry.push(brick.rotate());
+                }
+
+                partitions
+            })
+            .into_iter()
+            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_z_size(bricks)))
+            .collect();
+
+        let chunks = self.chunks.into_iter()
+            .map(|chunk| {
+                let bricks_by_z_size = &bricks_by_z_size[&chunk.unit_brick];
+                chunk.reduce_bricks(bricks_by_z_size)
+            })
+            .collect();
+
+        Mosaic { chunks }
+    }
+
+    pub fn make_3d(self, height: u16, flip: bool) -> Self {
+        let height_map = self.height_map(height, flip);
+        Mosaic {
+            chunks: self.chunks.into_iter()
+                .map(|chunk| {
+                    let key = chunk.color;
+                    chunk.set_z_size(height_map[&key])
+                })
+                .collect()
+        }
+    }
+
+    fn height_map(&self, z_size: u16, flip: bool) -> HeightMap<C> {
+        if z_size == 0 {
+            return HeightMap::new();
+        }
+
+        let (min_luma, max_luma) = self.chunks.iter()
+            .map(|chunk| {
+                let srgba_f32: Srgba<f32> = chunk.color.into().into_format();
+                srgba_f32.relative_luminance().luma
+            })
+            .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
+
+        let range = max_luma - min_luma;
+        let max_layer_index = z_size - 1;
+
+        let mut height_map = HeightMap::new();
+
+        self.chunks.iter().for_each(|chunk| {
+            let color = chunk.color;
+            let entry = height_map.entry(color);
+            entry.or_insert_with(|| {
+                let srgba_f32: Srgba<f32> = color.into().into_format();
+                let luma = srgba_f32.relative_luminance().luma;
+                let mut range_rel_luma = (luma - min_luma) / range;
+                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
+
+                /* z_size must be u16 because the max integer a 32-bit float can represent
+                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
+                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
+
+            });
+        });
+
+        height_map
+    }
+
+    fn partition_by_z_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
+            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
+            partitions
+        })
+            .into_iter()
+            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
+            .map(|(z_size, bricks)| {
+                let mut sizes = Vec::with_capacity(bricks.len());
+                for brick in bricks {
+                    sizes.push(AreaSortedBrick { brick, rotate: false });
+
+                    if brick.length() != brick.width() {
+                        sizes.push(AreaSortedBrick { brick, rotate: true });
+                    }
+                }
+
+                sizes.sort();
+
+                (z_size as u16, sizes)
+            })
+            .collect()
+    }
+
+}
+
+// ====================
+// PRIVATE TYPE ALIASES
+// ====================
+
+type RawColor = Srgba<u8>;
+
+type HeightMap<C> = HashMap<C, u16>;
+
+// ====================
+// PRIVATE FUNCTIONS
+// ====================
+
+fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
+    visited.get(y * x_size + x).unwrap()
+}
+
+fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, x: usize, y: usize, x_size: usize, start_color: C) -> bool {
+    !was_visited(visited, x, y, x_size) && colors.value(x, y) == start_color
+}
+
+fn assert_unit_brick<B: Brick>(brick: B) -> B {
+    assert_eq!(1, brick.length());
+    assert_eq!(1, brick.width());
+    assert_eq!(1, brick.height());
+
+    brick
+}
+
+// ====================
+// PRIVATE STRUCTS
+// ====================
 
 struct AreaSortedBrick<B> {
     brick: B,
@@ -266,218 +507,6 @@ impl<B: Brick, C: Color> Chunk<B, C> {
     }
 }
 
-pub struct Mosaic<B, C> {
-    chunks: Vec<Chunk<B, C>>
-}
-
-impl<B: Brick, C: Color> Mosaic<B, C> {
-
-    pub fn from_image(image: &DynamicImage, palette: &[C], unit_brick: B) -> Self {
-        assert_unit_brick(unit_brick);
-
-        let raw_colors: Pixels<RawColor> = image.into();
-        let colors = raw_colors.with_palette(palette);
-
-        let area = colors.values_by_row.len();
-        let x_size = colors.x_size;
-        let y_size = area / x_size;
-
-        let mut visited = BoolVec::filled_with(area, false);
-        let mut queue = VecDeque::new();
-        let mut chunks = Vec::new();
-
-        for start_y in 0..y_size {
-            for start_x in 0..x_size {
-                if was_visited(&visited, start_x, start_y, x_size) {
-                    continue;
-                }
-
-                let start_color = colors.value(start_x, start_y);
-                queue.push_back((start_x, start_y));
-
-                let mut coordinates = Vec::new();
-                let mut min_x = start_x;
-                let mut min_y = start_y;
-                let mut max_x = start_x;
-
-                while !queue.is_empty() {
-                    let (x, y) = queue.pop_front().unwrap();
-
-                    if was_visited(&visited, x, y, x_size) {
-                        continue;
-                    }
-                    visited.set(y * x_size + x, true);
-
-                    coordinates.push((x, y));
-
-                    min_x = min_x.min(x);
-                    min_y = min_y.min(y);
-                    max_x = max_x.max(x);
-
-                    if x > 0 && is_new_pos::<C>(&visited, &colors, x - 1, y, x_size, start_color) {
-                        queue.push_back((x - 1, y));
-                    }
-
-                    if x < x_size - 1 && is_new_pos::<C>(&visited, &colors, x + 1, y, x_size, start_color) {
-                        queue.push_back((x + 1, y));
-                    }
-
-                    if y > 0 && is_new_pos::<C>(&visited, &colors, x, y - 1, x_size, start_color) {
-                        queue.push_back((x, y - 1));
-                    }
-
-                    if y < y_size - 1 && is_new_pos::<C>(&visited, &colors, x, y + 1, x_size, start_color) {
-                        queue.push_back((x, y + 1));
-                    }
-                }
-
-                let chunk_x_size = max_x - min_x + 1;
-                let mut bricks = Vec::with_capacity(coordinates.len());
-                let mut ys_included = vec![BTreeSet::new(); chunk_x_size];
-
-                for (x, y) in coordinates {
-                    let rel_x = x - min_x;
-                    let rel_y = y - min_y;
-
-                    bricks.push(PlacedBrick {
-                        x: rel_x as u16,
-                        y: rel_y as u16,
-                        z: 0,
-                        brick: unit_brick,
-                        rotate: false
-                    });
-
-                    ys_included[rel_x].insert(rel_y as u16);
-                }
-
-                chunks.push(Chunk {
-                    unit_brick,
-                    color: start_color,
-                    x: min_x as u16,
-                    y: min_y as u16,
-                    z: 0,
-                    x_size: chunk_x_size as u16,
-                    z_size: 1,
-                    ys_included,
-                    bricks,
-                })
-            }
-        }
-
-        Mosaic { chunks }
-    }
-
-    pub fn reduce_bricks(self, bricks: &[B]) -> Self {
-        let bricks_by_z_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
-            .fold(HashMap::new(), |mut partitions, &brick| {
-                let unit_brick = assert_unit_brick(brick.unit_brick());
-                let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
-                entry.push(brick);
-
-                if brick.length() != brick.width() {
-                    entry.push(brick.rotate());
-                }
-
-                partitions
-            })
-            .into_iter()
-            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_z_size(bricks)))
-            .collect();
-
-        let chunks = self.chunks.into_iter()
-            .map(|chunk| {
-                let bricks_by_z_size = &bricks_by_z_size[&chunk.unit_brick];
-                chunk.reduce_bricks(bricks_by_z_size)
-            })
-            .collect();
-
-        Mosaic { chunks }
-    }
-
-    pub fn make_3d(self, height: u16, flip: bool) -> Self {
-        let height_map = self.height_map(height, flip);
-        Mosaic {
-            chunks: self.chunks.into_iter()
-                .map(|chunk| {
-                    let key = chunk.color;
-                    chunk.set_z_size(height_map[&key])
-                })
-                .collect()
-        }
-    }
-
-    fn height_map(&self, z_size: u16, flip: bool) -> HeightMap<C> {
-        if z_size == 0 {
-            return HeightMap::new();
-        }
-
-        let (min_luma, max_luma) = self.chunks.iter()
-            .map(|chunk| {
-                let srgba_f32: Srgba<f32> = chunk.color.into().into_format();
-                srgba_f32.relative_luminance().luma
-            })
-            .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
-
-        let range = max_luma - min_luma;
-        let max_layer_index = z_size - 1;
-
-        let mut height_map = HeightMap::new();
-
-        self.chunks.iter().for_each(|chunk| {
-            let color = chunk.color;
-            let entry = height_map.entry(color);
-            entry.or_insert_with(|| {
-                let srgba_f32: Srgba<f32> = color.into().into_format();
-                let luma = srgba_f32.relative_luminance().luma;
-                let mut range_rel_luma = (luma - min_luma) / range;
-                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
-
-                /* z_size must be u16 because the max integer a 32-bit float can represent
-                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
-                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
-
-            });
-        });
-
-        height_map
-    }
-
-    fn partition_by_z_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
-        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
-            partitions
-        })
-            .into_iter()
-            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
-            .map(|(z_size, bricks)| {
-                let mut sizes = Vec::with_capacity(bricks.len());
-                for brick in bricks {
-                    sizes.push(AreaSortedBrick { brick, rotate: false });
-
-                    if brick.length() != brick.width() {
-                        sizes.push(AreaSortedBrick { brick, rotate: true });
-                    }
-                }
-
-                sizes.sort();
-
-                (z_size as u16, sizes)
-            })
-            .collect()
-    }
-
-}
-
-type HeightMap<C> = HashMap<C, u16>;
-
-fn was_visited(visited: &BoolVec, x: usize, y: usize, x_size: usize) -> bool {
-    visited.get(y * x_size + x).unwrap()
-}
-
-fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, x: usize, y: usize, x_size: usize, start_color: C) -> bool {
-    !was_visited(visited, x, y, x_size) && colors.value(x, y) == start_color
-}
-
 struct Pixels<T> {
     values_by_row: Vec<T>,
     x_size: usize
@@ -551,12 +580,4 @@ impl Pixels<RawColor> {
         let distance = component1.abs_diff(component2) as u32;
         distance * distance
     }
-}
-
-fn assert_unit_brick<B: Brick>(brick: B) -> B {
-    assert_eq!(1, brick.length());
-    assert_eq!(1, brick.width());
-    assert_eq!(1, brick.height());
-
-    brick
 }
