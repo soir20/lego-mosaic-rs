@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
@@ -43,7 +42,7 @@ impl Brick for LdrawBrick {
         }
     }
 
-    fn rotate(&self) -> Self {
+    fn rotate_90(&self) -> Self {
         let transform = rotate_y(&self.transform, f32::to_radians(90f32));
         match self.unit_brick {
             None => LdrawBrick::new_unit(self.width, self.length, self.height, transform),

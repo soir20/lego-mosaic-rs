@@ -23,7 +23,7 @@ pub trait Brick: Copy + Hash + Eq {
 
     fn unit_brick(&self) -> Self;
 
-    fn rotate(&self) -> Self;
+    fn rotate_90(&self) -> Self;
 }
 
 // ====================
@@ -139,7 +139,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 entry.push(brick);
 
                 if brick.length() != brick.width() {
-                    entry.push(brick.rotate());
+                    entry.push(brick.rotate_90());
                 }
 
                 partitions
