@@ -3,26 +3,43 @@ use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
 use crate::{Brick, Color};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LdrawBrick {
+#[derive(Clone, Copy)]
+pub struct LdrawBrick<'a> {
+    id: &'a str,
+    rotated: bool,
     length: u8,
     width: u8,
     height: u8,
     transform: TMat4<f32>,
-    unit_brick: Option<LdrawBrick>
+    unit_brick: Option<&'a LdrawBrick<'a>>
 }
 
-impl LdrawBrick {
-    pub const fn new(length: u8, width: u8, height: u8, transform: TMat4<f32>, unit_brick: Self) -> Self {
-        LdrawBrick { length, width, height, transform, unit_brick: Some(unit_brick) }
+impl<'a> LdrawBrick<'a> {
+    pub const fn new(id: &'a str, length: u8, width: u8, height: u8, transform: TMat4<f32>, unit_brick: &'a Self) -> Self {
+        LdrawBrick { id, rotated: false, length, width, height, transform, unit_brick: Some(unit_brick) }
     }
 
-    pub const fn new_unit(length: u8, width: u8, height: u8, transform: TMat4<f32>) -> Self {
-        LdrawBrick { length, width, height, transform, unit_brick: None }
+    pub const fn new_unit(id: &'a str, length: u8, width: u8, height: u8, transform: TMat4<f32>) -> Self {
+        LdrawBrick { id, rotated: false, length, width, height, transform, unit_brick: None }
     }
 }
 
-impl Brick for LdrawBrick {
+impl Hash for LdrawBrick<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(self.id.as_ref());
+        state.write_u8(u8::from(self.rotated))
+    }
+}
+
+impl Eq for LdrawBrick<'_> {}
+
+impl PartialEq<Self> for LdrawBrick<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.rotated == other.rotated
+    }
+}
+
+impl Brick for LdrawBrick<'_> {
     fn length(&self) -> u8 {
         self.length
     }
@@ -38,15 +55,20 @@ impl Brick for LdrawBrick {
     fn unit_brick(&self) -> Self {
         match self.unit_brick {
             None => *self,
-            Some(unit_brick) => unit_brick
+            Some(unit_brick) => *unit_brick
         }
     }
 
     fn rotate_90(&self) -> Self {
         let transform = rotate_y(&self.transform, f32::to_radians(90f32));
-        match self.unit_brick {
-            None => LdrawBrick::new_unit(self.width, self.length, self.height, transform),
-            Some(unit_brick) => LdrawBrick::new(self.width, self.length, self.height, transform, unit_brick)
+        LdrawBrick {
+            id: self.id,
+            rotated: !self.rotated,
+            length: self.width,
+            width: self.length,
+            height: self.height,
+            transform,
+            unit_brick: self.unit_brick,
         }
     }
 }
