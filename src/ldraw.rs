@@ -99,12 +99,7 @@ impl PartialEq<Self> for LdrawColor {
 
 impl Hash for LdrawColor {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut key = 0u64;
-        key |= (self.value.red as u64) << 48;
-        key |= (self.value.green as u64) << 32;
-        key |= (self.value.blue as u64) << 16;
-        key |= self.value.alpha as u64;
-        state.write_u64(key)
+        state.write_u16(self.id)
     }
 }
 
