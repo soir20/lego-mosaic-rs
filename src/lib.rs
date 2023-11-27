@@ -12,11 +12,11 @@ type RawColor = Srgba<u8>;
 pub trait Color: Copy + Default + Eq + Hash + Into<Srgba<u8>> {}
 
 pub trait Brick: Copy + Hash + Eq {
-    fn x_size(&self) -> u8;
+    fn length(&self) -> u8;
 
-    fn y_size(&self) -> u8;
+    fn width(&self) -> u8;
 
-    fn z_size(&self) -> u8;
+    fn height(&self) -> u8;
 
     fn unit_brick(&self) -> Self;
 
@@ -31,15 +31,15 @@ struct AreaSortedBrick<B> {
 impl<B: Brick> AreaSortedBrick<B> {
     fn x_size(&self) -> u8 {
         match self.rotate {
-            true => self.brick.y_size(),
-            false => self.brick.x_size()
+            true => self.brick.width(),
+            false => self.brick.length()
         }
     }
 
     fn y_size(&self) -> u8 {
         match self.rotate {
-            true => self.brick.x_size(),
-            false => self.brick.y_size()
+            true => self.brick.length(),
+            false => self.brick.width()
         }
     }
 
@@ -119,19 +119,19 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                         }];
                     }
 
-                    let brick_z_above = brick.z + brick.brick.z_size() as u16;
+                    let brick_z_above = brick.z + brick.brick.height() as u16;
                     if brick_z_above <= new_min_z {
                         return vec![];
                     }
 
                     let zs_to_replace = brick_z_above - new_min_z;
                     let mut new_bricks = Vec::with_capacity(
-                        zs_to_replace as usize * brick.brick.x_size() as usize * brick.brick.y_size() as usize
+                        zs_to_replace as usize * brick.brick.length() as usize * brick.brick.width() as usize
                     );
 
                     for z in 0..(brick_z_above - new_min_z) {
-                        for x in brick.x..(brick.x + brick.brick.x_size() as u16) {
-                            for y in brick.y..(brick.y + brick.brick.y_size() as u16) {
+                        for x in brick.x..(brick.x + brick.brick.length() as u16) {
+                            for y in brick.y..(brick.y + brick.brick.width() as u16) {
                                 new_bricks.push(PlacedBrick {
                                     x,
                                     y,
@@ -374,7 +374,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
                 entry.push(brick);
 
-                if brick.x_size() != brick.y_size() {
+                if brick.length() != brick.width() {
                     entry.push(brick.rotate());
                 }
 
@@ -394,8 +394,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         Mosaic { chunks }
     }
 
-    pub fn make_3d(self, layers: u16, flip: bool) -> Self {
-        let height_map = self.height_map(layers, flip);
+    pub fn make_3d(self, height: u16, flip: bool) -> Self {
+        let height_map = self.height_map(height, flip);
         Mosaic {
             chunks: self.chunks.into_iter()
                 .map(|chunk| {
@@ -406,8 +406,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         }
     }
 
-    fn height_map(&self, layers: u16, flip: bool) -> HeightMap<C> {
-        if layers == 0 {
+    fn height_map(&self, z_size: u16, flip: bool) -> HeightMap<C> {
+        if z_size == 0 {
             return HeightMap::new();
         }
 
@@ -419,7 +419,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
 
         let range = max_luma - min_luma;
-        let max_layer_index = layers - 1;
+        let max_layer_index = z_size - 1;
 
         let mut height_map = HeightMap::new();
 
@@ -432,7 +432,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 let mut range_rel_luma = (luma - min_luma) / range;
                 range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
 
-                /* Layers must be u16 because the max integer a 32-bit float can represent
+                /* z_size must be u16 because the max integer a 32-bit float can represent
                    exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
                 (range_rel_luma * max_layer_index as f32).round() as u16 + 1
 
@@ -444,17 +444,17 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
     fn partition_by_z_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.z_size()).or_insert_with(Vec::new).push(brick);
+            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
             partitions
         })
             .into_iter()
-            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.x_size() == 1 && brick.y_size() == 1))
+            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
             .map(|(z_size, bricks)| {
                 let mut sizes = Vec::with_capacity(bricks.len());
                 for brick in bricks {
                     sizes.push(AreaSortedBrick { brick, rotate: false });
 
-                    if brick.x_size() != brick.y_size() {
+                    if brick.length() != brick.width() {
                         sizes.push(AreaSortedBrick { brick, rotate: true });
                     }
                 }
@@ -554,9 +554,9 @@ impl Pixels<RawColor> {
 }
 
 fn assert_unit_brick<B: Brick>(brick: B) -> B {
-    assert_eq!(1, brick.x_size());
-    assert_eq!(1, brick.y_size());
-    assert_eq!(1, brick.z_size());
+    assert_eq!(1, brick.length());
+    assert_eq!(1, brick.width());
+    assert_eq!(1, brick.height());
 
     brick
 }
