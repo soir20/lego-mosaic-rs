@@ -1,6 +1,56 @@
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
-use crate::Color;
+use crate::{Brick, Color};
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LdrawBrick {
+    length: u8,
+    width: u8,
+    height: u8,
+    transform: TMat4<f32>,
+    unit_brick: Option<LdrawBrick>
+}
+
+impl LdrawBrick {
+    pub const fn new(length: u8, width: u8, height: u8, transform: TMat4<f32>, unit_brick: Self) -> Self {
+        LdrawBrick { length, width, height, transform, unit_brick: Some(unit_brick) }
+    }
+
+    pub const fn new_unit(length: u8, width: u8, height: u8, transform: TMat4<f32>) -> Self {
+        LdrawBrick { length, width, height, transform, unit_brick: None }
+    }
+}
+
+impl Brick for LdrawBrick {
+    fn length(&self) -> u8 {
+        self.length
+    }
+
+    fn width(&self) -> u8 {
+        self.width
+    }
+
+    fn height(&self) -> u8 {
+        self.height
+    }
+
+    fn unit_brick(&self) -> Self {
+        match self.unit_brick {
+            None => *self,
+            Some(unit_brick) => unit_brick
+        }
+    }
+
+    fn rotate(&self) -> Self {
+        let transform = rotate_y(&self.transform, f32::to_radians(90f32));
+        match self.unit_brick {
+            None => LdrawBrick::new_unit(self.width, self.length, self.height, transform),
+            Some(unit_brick) => LdrawBrick::new(self.width, self.length, self.height, transform, unit_brick)
+        }
+    }
+}
 
 #[derive(Copy, Clone, Eq)]
 pub struct LdrawColor {
