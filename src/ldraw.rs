@@ -40,6 +40,58 @@ impl<'a> LdrawBrick<'a> {
             unit_brick: None
         }
     }
+
+    pub fn id(&self) -> &'a str {
+        self.id
+    }
+
+    pub fn a(&self) -> f32 {
+        self.transform.m11
+    }
+
+    pub fn b(&self) -> f32 {
+        self.transform.m21
+    }
+
+    pub fn c(&self) -> f32 {
+        self.transform.m31
+    }
+
+    pub fn d(&self) -> f32 {
+        self.transform.m12
+    }
+
+    pub fn e(&self) -> f32 {
+        self.transform.m22
+    }
+
+    pub fn f(&self) -> f32 {
+        self.transform.m32
+    }
+
+    pub fn g(&self) -> f32 {
+        self.transform.m13
+    }
+
+    pub fn h(&self) -> f32 {
+        self.transform.m23
+    }
+
+    pub fn i(&self) -> f32 {
+        self.transform.m33
+    }
+
+    pub fn x(&self) -> f32 {
+        self.transform.m41
+    }
+
+    pub fn y(&self) -> f32 {
+        self.transform.m42
+    }
+
+    pub fn z(&self) -> f32 {
+        self.transform.m43
+    }
 }
 
 impl Hash for LdrawBrick<'_> {
