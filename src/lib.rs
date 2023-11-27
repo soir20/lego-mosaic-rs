@@ -30,6 +30,28 @@ pub trait Brick: Copy + Hash + Eq {
 // PUBLIC STRUCTS
 // ====================
 
+pub struct PlacedBrick<B> {
+    x: u16,
+    y: u16,
+    z: u16,
+    brick: B,
+    rotate: bool
+}
+
+impl<B> PlacedBrick<B> {
+    pub fn l(&self) -> u16 {
+        self.x
+    }
+
+    pub fn w(&self) -> u16 {
+        self.y
+    }
+
+    pub fn h(&self) -> u16 {
+        self.z
+    }
+}
+
 pub struct Mosaic<B, C> {
     chunks: Vec<Chunk<B, C>>
 }
@@ -317,14 +339,6 @@ impl<B: Brick> Ord for AreaSortedBrick<B> {
 struct LayerPlacedBrick<B> {
     x: u16,
     y: u16,
-    brick: B,
-    rotate: bool
-}
-
-struct PlacedBrick<B> {
-    x: u16,
-    y: u16,
-    z: u16,
     brick: B,
     rotate: bool
 }
