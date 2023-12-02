@@ -71,6 +71,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
 
+        /* An iterative depth-first search that explores contiguous chunks of the mosaic with the
+           same color, similar to the classic island-finding problem */
         for start_w in 0..w_size {
             for start_l in 0..l_size {
                 if was_visited(&visited, start_l, start_w, l_size) {
@@ -88,6 +90,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 while !coords_to_visit.is_empty() {
                     let (l, w) = coords_to_visit.pop_front().unwrap();
 
+                    // Avoid an infinite loop by visiting no point twice
                     if was_visited(&visited, l, w, l_size) {
                         continue;
                     }
@@ -99,23 +102,29 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     min_w = min_w.min(w);
                     max_l = max_l.max(l);
 
+                    // Add position to the left to explore later
                     if l > 0 && is_new_pos::<C>(&visited, &colors, l - 1, w, l_size, start_color) {
                         coords_to_visit.push_back((l - 1, w));
                     }
 
+                    // Add position to the right to explore later
                     if l < l_size - 1 && is_new_pos::<C>(&visited, &colors, l + 1, w, l_size, start_color) {
                         coords_to_visit.push_back((l + 1, w));
                     }
 
+                    // Add position below to explore later
                     if w > 0 && is_new_pos::<C>(&visited, &colors, l, w - 1, l_size, start_color) {
                         coords_to_visit.push_back((l, w - 1));
                     }
 
+                    // Add position above to explore later
                     if w < w_size - 1 && is_new_pos::<C>(&visited, &colors, l, w + 1, l_size, start_color) {
                         coords_to_visit.push_back((l, w + 1));
                     }
+
                 }
 
+                // Compute relative coordinates for every point inside the fully-explored chunk
                 let chunk_l_size = max_l - min_l + 1;
                 let mut bricks = Vec::with_capacity(coords_in_chunk.len());
                 let mut ws_included = vec![BTreeSet::new(); chunk_l_size];
@@ -154,10 +163,13 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
         let bricks_by_h_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(HashMap::new(), |mut partitions, &brick| {
+
+                // Consider each brick's associated unit brick as its type
                 let unit_brick = assert_unit_brick(brick.unit_brick());
                 let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
                 entry.push(brick);
 
+                // A square brick rotated 90 degrees is redundant
                 if brick.length() != brick.width() {
                     entry.push(brick.rotate_90());
                 }
@@ -213,11 +225,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             entry.or_insert_with(|| {
                 let srgba_f32: Srgba<f32> = color.into().into_format();
                 let luma = srgba_f32.relative_luminance().luma;
+
+                // Normalize the luma within the range of luma values found in the image
                 let mut range_rel_luma = (luma - min_luma) / range;
                 range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
 
                 /* h_size must be u16 because the max integer a 32-bit float can represent
-                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). */
+                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). Add one
+                   because every layer must be at least 1 plate tall, while index starts at
+                   0. */
                 (range_rel_luma * max_layer_index as f32).round() as u16 + 1
 
             });
