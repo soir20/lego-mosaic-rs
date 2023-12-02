@@ -90,8 +90,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
 
-        /* An iterative depth-first search that explores contiguous chunks of the mosaic with the
-           same color, similar to the classic island-finding problem */
+        /* An iterative breadth-first search that explores contiguous chunks of the mosaic with
+           the same color, similar to the classic island-finding problem */
         for start_w in 0..w_size {
             for start_l in 0..l_size {
                 if was_visited(&visited, start_l, start_w, l_size) {
