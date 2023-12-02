@@ -68,7 +68,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let w_size = area / l_size;
 
         let mut visited = BoolVec::filled_with(area, false);
-        let mut queue = VecDeque::new();
+        let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
 
         for start_w in 0..w_size {
@@ -78,49 +78,49 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 }
 
                 let start_color = colors.value(start_l, start_w);
-                queue.push_back((start_l, start_w));
+                coords_to_visit.push_back((start_l, start_w));
 
-                let mut coordinates = Vec::new();
+                let mut coords_in_chunk = Vec::new();
                 let mut min_l = start_l;
                 let mut min_w = start_w;
                 let mut max_l = start_l;
 
-                while !queue.is_empty() {
-                    let (l, w) = queue.pop_front().unwrap();
+                while !coords_to_visit.is_empty() {
+                    let (l, w) = coords_to_visit.pop_front().unwrap();
 
                     if was_visited(&visited, l, w, l_size) {
                         continue;
                     }
                     visited.set(w * l_size + l, true);
 
-                    coordinates.push((l, w));
+                    coords_in_chunk.push((l, w));
 
                     min_l = min_l.min(l);
                     min_w = min_w.min(w);
                     max_l = max_l.max(l);
 
                     if l > 0 && is_new_pos::<C>(&visited, &colors, l - 1, w, l_size, start_color) {
-                        queue.push_back((l - 1, w));
+                        coords_to_visit.push_back((l - 1, w));
                     }
 
                     if l < l_size - 1 && is_new_pos::<C>(&visited, &colors, l + 1, w, l_size, start_color) {
-                        queue.push_back((l + 1, w));
+                        coords_to_visit.push_back((l + 1, w));
                     }
 
                     if w > 0 && is_new_pos::<C>(&visited, &colors, l, w - 1, l_size, start_color) {
-                        queue.push_back((l, w - 1));
+                        coords_to_visit.push_back((l, w - 1));
                     }
 
                     if w < w_size - 1 && is_new_pos::<C>(&visited, &colors, l, w + 1, l_size, start_color) {
-                        queue.push_back((l, w + 1));
+                        coords_to_visit.push_back((l, w + 1));
                     }
                 }
 
                 let chunk_l_size = max_l - min_l + 1;
-                let mut bricks = Vec::with_capacity(coordinates.len());
+                let mut bricks = Vec::with_capacity(coords_in_chunk.len());
                 let mut ws_included = vec![BTreeSet::new(); chunk_l_size];
 
-                for (l, w) in coordinates {
+                for (l, w) in coords_in_chunk {
                     let rel_l = l - min_l;
                     let rel_w = w - min_w;
 
