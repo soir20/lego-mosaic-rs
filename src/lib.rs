@@ -350,12 +350,19 @@ struct Chunk<B, C> {
 impl<B: Brick, C: Color> Chunk<B, C> {
 
     pub fn set_h_size(mut self, new_h_size: u16) -> Self {
+
+        /* For any column (l, w), any brick at height h in the column will be the same color.
+           Hence, we only need to consider the numerical difference in the number of layers and
+           remove bricks or move them vertically. */
         let new_layers = new_h_size.abs_diff(self.h_size);
 
         if self.h_size > new_h_size {
             let new_min_h = new_layers;
             self.bricks = self.bricks.into_iter()
                 .flat_map(|brick| {
+
+                    /* If the brick's bottom is at or above the threshold, we only need to update
+                       its h coordinate relative to the new minimum. */
                     if brick.h >= new_min_h {
                         return vec![PlacedBrick {
                             l: brick.l,
@@ -365,11 +372,16 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                         }];
                     }
 
+                    // Remove any bricks entirely below the threshold
                     let brick_h_above = brick.h + brick.brick.height() as u16;
                     if brick_h_above <= new_min_h {
                         return vec![];
                     }
 
+                    /* In this case, the threshold passes through the middle of the brick. Remove
+                       it and fill the empty space between the threshold and the brick's top with
+                       1x1 bricks plates. Even if the bricks were reduced previously, this method
+                       does not guarantee any reduction in bricks. */
                     let hs_to_replace = brick_h_above - new_min_h;
                     let mut new_bricks = Vec::with_capacity(
                         hs_to_replace as usize * brick.brick.length() as usize * brick.brick.width() as usize
@@ -392,6 +404,8 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                 })
                 .collect();
         } else {
+
+            // Fill the new space with 1x1 plates
             for h in self.h_size..(self.h_size + new_layers) {
                 for l in 0..self.l_size {
                     for &w in self.ws_included[l as usize].iter() {
@@ -404,6 +418,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                     }
                 }
             }
+
         }
 
         self.h_size = new_h_size;
@@ -418,7 +433,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
 
         /* For simplicity, divide the chunk along the h axis into as few layers as possible.
            Because every entry contains at least one 1x1 brick with the given height, we know we
-           can fill a layer of that height completely. The standard 1x1x1 brick is 5 plates tall,
+           can fill a layer of that height completely. The standard 1x1 brick is 5 plates tall,
            so most of the time, solutions from a simpler algorithm that only needs to fill 2D
            space should be fairly close to those from an algorithm that considered 3D space. */
         for &h_size in bricks_by_h_size.keys().rev() {
