@@ -227,6 +227,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 
     fn partition_by_h_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+
+        /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
+           a layer of that h size. */
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
             partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
             partitions
@@ -234,6 +237,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
             .map(|(h_size, bricks)| {
+
+                /* Sort bricks by area so that larger bricks are chosen first. We don't need to
+                   sort by volume because the brick-filling algorithm only needs to consider 2D
+                   space. */
                 let mut sizes: Vec<_> = bricks.into_iter()
                     .map(|brick| AreaSortedBrick { brick })
                     .collect();
@@ -242,6 +249,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 (h_size as u16, sizes)
             })
             .collect()
+
     }
 
 }
@@ -408,6 +416,11 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         let mut remaining_height = self.h_size;
         let mut layers = Vec::new();
 
+        /* For simplicity, divide the chunk along the h axis into as few layers as possible.
+           Because every entry contains at least one 1x1 brick with the given height, we know we
+           can fill a layer of that height completely. The standard 1x1x1 brick is 5 plates tall,
+           so most of the time, solutions from a simpler algorithm that only needs to fill 2D
+           space should be fairly close to those from an algorithm that considered 3D space. */
         for &h_size in bricks_by_h_size.keys().rev() {
             let layers_of_size = remaining_height / h_size;
             remaining_height %= h_size;
@@ -446,6 +459,12 @@ impl<B: Brick, C: Color> Chunk<B, C> {
     fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], l_size: u16, mut ws_included_by_l: Vec<BTreeSet<u16>>) -> Vec<LayerPlacedBrick<B>> {
         let mut bricks = Vec::new();
 
+        /* For every space in the chunk that is empty, try to fit the largest possible brick in
+           that space and the spaces surrounding it. If it fits, place the brick at that position
+           to fill those empty spaces. This greedy approach may produce sub-optimal solutions, but
+           its solutions are often optimal or close to optimal. The problem of finding an optimal
+           solution is likely NP-complete, given its similarity to the exact cover problem, and
+           thus no known polynomial-time optimal algorithm exists. */
         for l in 0..l_size {
             let l_index = l as usize;
 
@@ -467,6 +486,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
             }
         }
 
+
         bricks
     }
 
@@ -474,10 +494,12 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         let max_l = l + l_size as u16;
         let max_w = w + w_size as u16;
 
+        // Brick extends beyond the chunk's length
         if max_l as usize > ws_included_by_l.len() {
             return false;
         }
 
+        // Check whether every point in the chunk that would be filled by the brick is empty
         for test_l in l..max_l {
             if ws_included_by_l[test_l as usize].range(w..max_w).count() < w_size as usize {
                 return false;
@@ -492,11 +514,13 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         let max_l = l as usize + l_size as usize;
         let max_w = w + w_size as u16;
 
+        // Remove all entries corresponding to a point inside the brick
         for ws_included in ws_included_by_l.iter_mut().take(max_l).skip(min_l) {
             for cur_w in w..max_w {
                 ws_included.remove(&cur_w);
             }
         }
+
     }
 }
 
