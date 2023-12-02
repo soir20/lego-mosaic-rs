@@ -8,7 +8,7 @@ pub type TransformMatrix = TMat4<f32>;
 #[derive(Clone, Copy)]
 pub struct LdrawBrick<'a> {
     id: &'a str,
-    rotated: bool,
+    rotation_count: u8,
     length: u8,
     width: u8,
     height: u8,
@@ -20,7 +20,7 @@ impl<'a> LdrawBrick<'a> {
     pub fn new(id: &'a str, length: u8, width: u8, height: u8, transform: TransformMatrix, unit_brick: &'a Self) -> Self {
         LdrawBrick {
             id,
-            rotated: false,
+            rotation_count: 0,
             length,
             width,
             height,
@@ -29,13 +29,13 @@ impl<'a> LdrawBrick<'a> {
         }
     }
 
-    pub fn new_unit(id: &'a str, length: u8, width: u8, height: u8, transform: TransformMatrix) -> Self {
+    pub fn new_unit(id: &'a str, transform: TransformMatrix) -> Self {
         LdrawBrick {
             id,
-            rotated: false,
-            length,
-            width,
-            height,
+            rotation_count: 0,
+            length: 1,
+            width: 1,
+            height: 1,
             transform: assert_homogeneous_matrix(transform),
             unit_brick: None
         }
@@ -97,7 +97,7 @@ impl<'a> LdrawBrick<'a> {
 impl Hash for LdrawBrick<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write(self.id.as_ref());
-        state.write_u8(u8::from(self.rotated))
+        state.write_u8(self.rotation_count)
     }
 }
 
@@ -105,7 +105,7 @@ impl Eq for LdrawBrick<'_> {}
 
 impl PartialEq<Self> for LdrawBrick<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.rotated == other.rotated
+        self.id == other.id && self.rotation_count == other.rotation_count
     }
 }
 
@@ -133,7 +133,7 @@ impl Brick for LdrawBrick<'_> {
         let transform = rotate_y(&self.transform, f32::to_radians(90f32));
         LdrawBrick {
             id: self.id,
-            rotated: !self.rotated,
+            rotation_count: (self.rotation_count + 1) % 4,
             length: self.width,
             width: self.length,
             height: self.height,
