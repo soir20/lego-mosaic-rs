@@ -34,8 +34,7 @@ pub struct PlacedBrick<B> {
     l: u16,
     w: u16,
     h: u16,
-    brick: B,
-    rotate: bool
+    brick: B
 }
 
 impl<B> PlacedBrick<B> {
@@ -129,8 +128,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                         l: rel_l as u16,
                         w: rel_w as u16,
                         h: 0,
-                        brick: unit_brick,
-                        rotate: false
+                        brick: unit_brick
                     });
 
                     ws_included[rel_l].insert(rel_w as u16);
@@ -236,15 +234,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
             .map(|(h_size, bricks)| {
-                let mut sizes = Vec::with_capacity(bricks.len());
-                for brick in bricks {
-                    sizes.push(AreaSortedBrick { brick, rotate: false });
-
-                    if brick.length() != brick.width() {
-                        sizes.push(AreaSortedBrick { brick, rotate: true });
-                    }
-                }
-
+                let mut sizes: Vec<_> = bricks.into_iter()
+                    .map(|brick| AreaSortedBrick { brick })
+                    .collect();
                 sizes.sort();
 
                 (h_size as u16, sizes)
@@ -287,23 +279,16 @@ fn assert_unit_brick<B: Brick>(brick: B) -> B {
 // ====================
 
 struct AreaSortedBrick<B> {
-    brick: B,
-    rotate: bool
+    brick: B
 }
 
 impl<B: Brick> AreaSortedBrick<B> {
     fn l_size(&self) -> u8 {
-        match self.rotate {
-            true => self.brick.width(),
-            false => self.brick.length()
-        }
+        self.brick.length()
     }
 
     fn w_size(&self) -> u8 {
-        match self.rotate {
-            true => self.brick.length(),
-            false => self.brick.width()
-        }
+        self.brick.width()
     }
 
     fn area(&self) -> u16 {
@@ -339,8 +324,7 @@ impl<B: Brick> Ord for AreaSortedBrick<B> {
 struct LayerPlacedBrick<B> {
     l: u16,
     w: u16,
-    brick: B,
-    rotate: bool
+    brick: B
 }
 
 struct Chunk<B, C> {
@@ -369,8 +353,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                             l: brick.l,
                             w: brick.w,
                             h: brick.h - new_min_h,
-                            brick: brick.brick,
-                            rotate: brick.rotate,
+                            brick: brick.brick
                         }];
                     }
 
@@ -391,8 +374,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                                     l,
                                     w,
                                     h,
-                                    brick: self.unit_brick,
-                                    rotate: false
+                                    brick: self.unit_brick
                                 });
                             }
                         }
@@ -409,8 +391,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                             l,
                             w,
                             h,
-                            brick: self.unit_brick,
-                            rotate: false
+                            brick: self.unit_brick
                         });
                     }
                 }
@@ -445,8 +426,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                     l: self.l + placed_brick.l,
                     w: self.w + placed_brick.w,
                     h: h_index,
-                    brick: placed_brick.brick,
-                    rotate: placed_brick.rotate
+                    brick: placed_brick.brick
                 })
         }).collect();
 
@@ -479,8 +459,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
                             bricks.push(LayerPlacedBrick {
                                 brick: size.brick,
                                 l,
-                                w,
-                                rotate: size.rotate
+                                w
                             })
                         }
                     }
