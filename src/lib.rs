@@ -8,6 +8,25 @@ use image::{DynamicImage, GenericImageView, Pixel};
 use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
+//! This API uses l, w, and h coordinate axes, which refer to length, width, and height,
+//! respectively. A brick's length refers to its size along the l axis, a brick's
+//! width refers to its size along the w axis, and a brick's height refers to its size
+//! along the h axis.
+//!
+//! From a bird's eye view, increasing l refers to moving east, while increasing w
+//! refers to moving south. Increasing h refers to increasing altitude above the plane.
+//! This is consistent with image editors, as well as the image crate, which put the
+//! origin at the top left.
+//!
+//! The x, y, and z axes are not used because l, w, and h more clearly map to brick size,
+//! and many existing programs have conflicting definitions of what y and z refer to.
+//! For example, in the LDraw format, decreasing y is analogous to increasing altitude,
+//! and x and z are horizontal axes. In other programs, z is the vertical axis instead
+//! of y, and increasing z is analogous to increasing altitude. With the l, w, and h axes,
+//! the user must explicitly consider the mapping between this API's axes and another
+//! program's x, y, and z axes, rather than assuming the API's axes conform to those of
+//! another program.
+
 // ====================
 // PUBLIC TRAITS
 // ====================
