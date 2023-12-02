@@ -83,8 +83,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let colors = raw_colors.with_palette(palette);
 
         let area = colors.values_by_row.len();
-        let l_size = colors.l_size;
-        let w_size = area / l_size;
+        let length = colors.length;
+        let width = area / length;
 
         let mut visited = BoolVec::filled_with(area, false);
         let mut coords_to_visit = VecDeque::new();
@@ -92,9 +92,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
         /* An iterative breadth-first search that explores contiguous chunks of the mosaic with
            the same color, similar to the classic island-finding problem */
-        for start_w in 0..w_size {
-            for start_l in 0..l_size {
-                if was_visited(&visited, start_l, start_w, l_size) {
+        for start_w in 0..width {
+            for start_l in 0..length {
+                if was_visited(&visited, start_l, start_w, length) {
                     continue;
                 }
 
@@ -110,10 +110,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     let (l, w) = coords_to_visit.pop_front().unwrap();
 
                     // Avoid an infinite loop by visiting no point twice
-                    if was_visited(&visited, l, w, l_size) {
+                    if was_visited(&visited, l, w, length) {
                         continue;
                     }
-                    visited.set(w * l_size + l, true);
+                    visited.set(w * length + l, true);
 
                     coords_in_chunk.push((l, w));
 
@@ -122,31 +122,31 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     max_l = max_l.max(l);
 
                     // Add position to the left to explore later
-                    if l > 0 && is_new_pos::<C>(&visited, &colors, l - 1, w, l_size, start_color) {
+                    if l > 0 && is_new_pos::<C>(&visited, &colors, l - 1, w, length, start_color) {
                         coords_to_visit.push_back((l - 1, w));
                     }
 
                     // Add position to the right to explore later
-                    if l < l_size - 1 && is_new_pos::<C>(&visited, &colors, l + 1, w, l_size, start_color) {
+                    if l < length - 1 && is_new_pos::<C>(&visited, &colors, l + 1, w, length, start_color) {
                         coords_to_visit.push_back((l + 1, w));
                     }
 
                     // Add position below to explore later
-                    if w > 0 && is_new_pos::<C>(&visited, &colors, l, w - 1, l_size, start_color) {
+                    if w > 0 && is_new_pos::<C>(&visited, &colors, l, w - 1, length, start_color) {
                         coords_to_visit.push_back((l, w - 1));
                     }
 
                     // Add position above to explore later
-                    if w < w_size - 1 && is_new_pos::<C>(&visited, &colors, l, w + 1, l_size, start_color) {
+                    if w < width - 1 && is_new_pos::<C>(&visited, &colors, l, w + 1, length, start_color) {
                         coords_to_visit.push_back((l, w + 1));
                     }
 
                 }
 
                 // Compute relative coordinates for every point inside the fully-explored chunk
-                let chunk_l_size = max_l - min_l + 1;
+                let chunk_length = max_l - min_l + 1;
                 let mut bricks = Vec::with_capacity(coords_in_chunk.len());
-                let mut ws_included = vec![BTreeSet::new(); chunk_l_size];
+                let mut ws_included = vec![BTreeSet::new(); chunk_length];
 
                 for (l, w) in coords_in_chunk {
                     let rel_l = l - min_l;
@@ -168,8 +168,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     l: min_l as u16,
                     w: min_w as u16,
                     h: 0,
-                    l_size: chunk_l_size as u16,
-                    h_size: 1,
+                    length: chunk_length as u16,
+                    height: 1,
                     ws_included,
                     bricks,
                 })
@@ -180,7 +180,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
-        let bricks_by_h_size: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
+        let bricks_by_height: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(HashMap::new(), |mut partitions, &brick| {
 
                 // Consider each brick's associated unit brick as its type
@@ -196,13 +196,13 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 partitions
             })
             .into_iter()
-            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_h_size(bricks)))
+            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_height(bricks)))
             .collect();
 
         let chunks = self.chunks.into_iter()
             .map(|chunk| {
-                let bricks_by_h_size = &bricks_by_h_size[&chunk.unit_brick];
-                chunk.reduce_bricks(bricks_by_h_size)
+                let bricks_by_height = &bricks_by_height[&chunk.unit_brick];
+                chunk.reduce_bricks(bricks_by_height)
             })
             .collect();
 
@@ -215,14 +215,14 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             chunks: self.chunks.into_iter()
                 .map(|chunk| {
                     let key = chunk.color;
-                    chunk.set_h_size(height_map[&key])
+                    chunk.set_height(height_map[&key])
                 })
                 .collect()
         }
     }
 
-    fn height_map(&self, h_size: u16, flip: bool) -> HeightMap<C> {
-        if h_size == 0 {
+    fn height_map(&self, height: u16, flip: bool) -> HeightMap<C> {
+        if height == 0 {
             return HeightMap::new();
         }
 
@@ -234,7 +234,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
 
         let range = max_luma - min_luma;
-        let max_layer_index = h_size - 1;
+        let max_layer_index = height - 1;
 
         let mut height_map = HeightMap::new();
 
@@ -249,7 +249,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 let mut range_rel_luma = (luma - min_luma) / range;
                 range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
 
-                /* h_size must be u16 because the max integer a 32-bit float can represent
+                /* height must be u16 because the max integer a 32-bit float can represent
                    exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). Add one
                    because every layer must be at least 1 plate tall, while index starts at
                    0. */
@@ -261,7 +261,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         height_map
     }
 
-    fn partition_by_h_size(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
 
         /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
            a layer of that h size. */
@@ -271,7 +271,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         })
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
-            .map(|(h_size, bricks)| {
+            .map(|(height, bricks)| {
 
                 /* Sort bricks by area so that larger bricks are chosen first. We don't need to
                    sort by volume because the brick-filling algorithm only needs to consider 2D
@@ -281,7 +281,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     .collect();
                 sizes.sort();
 
-                (h_size as u16, sizes)
+                (height as u16, sizes)
             })
             .collect()
 
@@ -301,12 +301,12 @@ type HeightMap<C> = HashMap<C, u16>;
 // PRIVATE FUNCTIONS
 // ====================
 
-fn was_visited(visited: &BoolVec, l: usize, w: usize, l_size: usize) -> bool {
-    visited.get(w * l_size + l).unwrap()
+fn was_visited(visited: &BoolVec, l: usize, w: usize, length: usize) -> bool {
+    visited.get(w * length + l).unwrap()
 }
 
-fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, l: usize, w: usize, l_size: usize, start_color: C) -> bool {
-    !was_visited(visited, l, w, l_size) && colors.value(l, w) == start_color
+fn is_new_pos<C: Color>(visited: &BoolVec, colors: &Pixels<C>, l: usize, w: usize, length: usize, start_color: C) -> bool {
+    !was_visited(visited, l, w, length) && colors.value(l, w) == start_color
 }
 
 fn assert_unit_brick<B: Brick>(brick: B) -> B {
@@ -326,16 +326,16 @@ struct AreaSortedBrick<B> {
 }
 
 impl<B: Brick> AreaSortedBrick<B> {
-    fn l_size(&self) -> u8 {
+    fn length(&self) -> u8 {
         self.brick.length()
     }
 
-    fn w_size(&self) -> u8 {
+    fn width(&self) -> u8 {
         self.brick.width()
     }
 
     fn area(&self) -> u16 {
-        self.l_size() as u16 * self.w_size() as u16
+        self.length() as u16 * self.width() as u16
     }
 }
 
@@ -376,22 +376,22 @@ struct Chunk<B, C> {
     l: u16,
     w: u16,
     h: u16,
-    l_size: u16,
-    h_size: u16,
+    length: u16,
+    height: u16,
     ws_included: Vec<BTreeSet<u16>>,
     bricks: Vec<PlacedBrick<B>>
 }
 
 impl<B: Brick, C: Color> Chunk<B, C> {
 
-    pub fn set_h_size(mut self, new_h_size: u16) -> Self {
+    pub fn set_height(mut self, new_height: u16) -> Self {
 
         /* For any column (l, w), any brick at height h in the column will be the same color.
            Hence, we only need to consider the numerical difference in the number of layers and
            remove bricks or move them vertically. */
-        let new_layers = new_h_size.abs_diff(self.h_size);
+        let new_layers = new_height.abs_diff(self.height);
 
-        if self.h_size > new_h_size {
+        if self.height > new_height {
             let new_min_h = new_layers;
             self.bricks = self.bricks.into_iter()
                 .flat_map(|brick| {
@@ -441,8 +441,8 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         } else {
 
             // Fill the new space with 1x1 plates
-            for h in self.h_size..(self.h_size + new_layers) {
-                for l in 0..self.l_size {
+            for h in self.height..(self.height + new_layers) {
+                for l in 0..self.length {
                     for &w in self.ws_included[l as usize].iter() {
                         self.bricks.push(PlacedBrick {
                             l,
@@ -456,14 +456,14 @@ impl<B: Brick, C: Color> Chunk<B, C> {
 
         }
 
-        self.h_size = new_h_size;
+        self.height = new_height;
 
         self
     }
 
-    pub fn reduce_bricks(self, bricks_by_h_size: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
+    pub fn reduce_bricks(self, bricks_by_height: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_h_index = 0;
-        let mut remaining_height = self.h_size;
+        let mut remaining_height = self.height;
         let mut layers = Vec::new();
 
         /* For simplicity, divide the chunk along the h axis into as few layers as possible.
@@ -471,19 +471,19 @@ impl<B: Brick, C: Color> Chunk<B, C> {
            can fill a layer of that height completely. The standard 1x1 brick is 5 plates tall,
            so most of the time, solutions from a simpler algorithm that only needs to fill 2D
            space should be fairly close to those from an algorithm that considered 3D space. */
-        for &h_size in bricks_by_h_size.keys().rev() {
-            let layers_of_size = remaining_height / h_size;
-            remaining_height %= h_size;
+        for &height in bricks_by_height.keys().rev() {
+            let layers_of_size = remaining_height / height;
+            remaining_height %= height;
 
             for _ in 0..layers_of_size {
-                layers.push((h_size, last_h_index));
-                last_h_index += h_size;
+                layers.push((height, last_h_index));
+                last_h_index += height;
             }
         }
 
-        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(h_size, h_index)| {
-            let sizes = &bricks_by_h_size[&h_size];
-            Chunk::<B, C>::reduce_single_layer(sizes, self.l_size, self.ws_included.clone())
+        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
+            let sizes = &bricks_by_height[&height];
+            Chunk::<B, C>::reduce_single_layer(sizes, self.length, self.ws_included.clone())
                 .into_iter()
                 .map(move |placed_brick| PlacedBrick {
                     l: self.l + placed_brick.l,
@@ -499,14 +499,14 @@ impl<B: Brick, C: Color> Chunk<B, C> {
             l: self.l,
             w: self.w,
             h: self.h,
-            l_size: self.l_size,
-            h_size: self.h_size,
+            length: self.length,
+            height: self.height,
             ws_included: self.ws_included,
             bricks,
         }
     }
 
-    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], l_size: u16, mut ws_included_by_l: Vec<BTreeSet<u16>>) -> Vec<LayerPlacedBrick<B>> {
+    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], length: u16, mut ws_included_by_l: Vec<BTreeSet<u16>>) -> Vec<LayerPlacedBrick<B>> {
         let mut bricks = Vec::new();
 
         /* For every space in the chunk that is empty, try to fit the largest possible brick in
@@ -515,7 +515,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
            its solutions are often optimal or close to optimal. The problem of finding an optimal
            solution is likely NP-complete, given its similarity to the exact cover problem, and
            thus no known polynomial-time optimal algorithm exists. */
-        for l in 0..l_size {
+        for l in 0..length {
             let l_index = l as usize;
 
             while !ws_included_by_l[l_index].is_empty() {
@@ -523,8 +523,8 @@ impl<B: Brick, C: Color> Chunk<B, C> {
 
                 if let Some(&w) = ws_included.first() {
                     for size in sizes {
-                        if Chunk::<B, C>::fits(l, w, size.l_size(), size.w_size(), &ws_included_by_l) {
-                            Chunk::<B, C>::remove_brick(l, w, size.l_size(), size.w_size(), &mut ws_included_by_l);
+                        if Chunk::<B, C>::fits(l, w, size.length(), size.width(), &ws_included_by_l) {
+                            Chunk::<B, C>::remove_brick(l, w, size.length(), size.width(), &mut ws_included_by_l);
                             bricks.push(LayerPlacedBrick {
                                 brick: size.brick,
                                 l,
@@ -540,9 +540,9 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         bricks
     }
 
-    fn fits(l: u16, w: u16, l_size: u8, w_size: u8, ws_included_by_l: &[BTreeSet<u16>]) -> bool {
-        let max_l = l + l_size as u16;
-        let max_w = w + w_size as u16;
+    fn fits(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u16>]) -> bool {
+        let max_l = l + length as u16;
+        let max_w = w + width as u16;
 
         // Brick extends beyond the chunk's length
         if max_l as usize > ws_included_by_l.len() {
@@ -551,7 +551,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
 
         // Check whether every point in the chunk that would be filled by the brick is empty
         for test_l in l..max_l {
-            if ws_included_by_l[test_l as usize].range(w..max_w).count() < w_size as usize {
+            if ws_included_by_l[test_l as usize].range(w..max_w).count() < width as usize {
                 return false;
             }
         }
@@ -559,10 +559,10 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         true
     }
 
-    fn remove_brick(l: u16, w: u16, l_size: u8, w_size: u8, ws_included_by_l: &mut [BTreeSet<u16>]) {
+    fn remove_brick(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &mut [BTreeSet<u16>]) {
         let min_l = l as usize;
-        let max_l = l as usize + l_size as usize;
-        let max_w = w + w_size as u16;
+        let max_l = l as usize + length as usize;
+        let max_w = w + width as u16;
 
         // Remove all entries corresponding to a point inside the brick
         for ws_included in ws_included_by_l.iter_mut().take(max_l).skip(min_l) {
@@ -576,23 +576,23 @@ impl<B: Brick, C: Color> Chunk<B, C> {
 
 struct Pixels<T> {
     values_by_row: Vec<T>,
-    l_size: usize
+    length: usize
 }
 
 impl<T: Copy> Pixels<T> {
     pub fn value(&self, l: usize, w: usize) -> T {
-        self.values_by_row[w * self.l_size + l]
+        self.values_by_row[w * self.length + l]
     }
 }
 
 impl From<&DynamicImage> for Pixels<RawColor> {
     fn from(image: &DynamicImage) -> Self {
-        let l_size = image.width() as usize;
-        let w_size = image.height() as usize;
-        let mut colors = Vec::with_capacity(l_size * w_size);
+        let length = image.width() as usize;
+        let width = image.height() as usize;
+        let mut colors = Vec::with_capacity(length * width);
 
-        for w in 0..w_size {
-            for l in 0..l_size {
+        for w in 0..width {
+            for l in 0..length {
                 let color = image.get_pixel(l as u32, w as u32).to_rgba();
                 let channels = color.channels();
                 let red = channels[0];
@@ -604,7 +604,7 @@ impl From<&DynamicImage> for Pixels<RawColor> {
             }
         }
 
-        Pixels { values_by_row: colors, l_size }
+        Pixels { values_by_row: colors, length }
     }
 }
 
@@ -613,7 +613,7 @@ impl Pixels<RawColor> {
         let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
-        Pixels { values_by_row: new_colors, l_size: self.l_size }
+        Pixels { values_by_row: new_colors, length: self.length }
     }
 
     fn find_similar_color<C: Color>(color: RawColor, palette: &[C]) -> C {
