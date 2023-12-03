@@ -71,8 +71,8 @@ impl<B> PlacedBrick<B> {
 }
 
 pub struct Mosaic<B, C> {
-    height_map: HeightMap<C>,
-    chunks: Vec<Chunk<B, C>>
+    chunks: Vec<Chunk<B, C>>,
+    height_map: HeightMap<C>
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
@@ -179,7 +179,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             }
         }
 
-        Mosaic { height_map, chunks }
+        Mosaic::new(chunks, height_map)
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
@@ -209,13 +209,13 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             })
             .collect();
 
-        Mosaic { height_map: self.height_map, chunks }
+        Mosaic::new(chunks, self.height_map)
     }
 
     pub fn make_3d(self, height: u16, flip: bool) -> Self {
         let height_map = self.height_map(height, flip);
-        Mosaic {
-            chunks: self.chunks.into_iter()
+        Mosaic::new(
+            self.chunks.into_iter()
                 .map(|mut chunk| {
                     let key = chunk.color;
                     let old_color_height = self.height_map[&key];
@@ -241,6 +241,16 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 })
                 .collect(),
             height_map
+        )
+    }
+
+    fn new(chunks: Vec<Chunk<B, C>>, height_map: HeightMap<C>) -> Self {
+        Mosaic {
+            height_map,
+            chunks: chunks.into_iter().filter(|chunk| {
+                let has_width = chunk.ws_included.iter().any(|ws| !ws.is_empty());
+                chunk.length > 0 && has_width && chunk.height > 0
+            }).collect()
         }
     }
 
