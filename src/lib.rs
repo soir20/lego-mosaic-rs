@@ -384,7 +384,7 @@ struct Chunk<B, C> {
 
 impl<B: Brick, C: Color> Chunk<B, C> {
 
-    pub fn set_height(mut self, new_height: u16) -> Self {
+    fn set_height(mut self, new_height: u16) -> Self {
 
         /* For any column (l, w), any brick at height h in the column will be the same color.
            Hence, we only need to consider the numerical difference in the number of layers and
@@ -461,7 +461,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         self
     }
 
-    pub fn reduce_bricks(self, bricks_by_height: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
+    fn reduce_bricks(self, bricks_by_height: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_h_index = 0;
         let mut remaining_height = self.height;
         let mut layers = Vec::new();
@@ -580,7 +580,7 @@ struct Pixels<T> {
 }
 
 impl<T: Copy> Pixels<T> {
-    pub fn value(&self, l: usize, w: usize) -> T {
+    fn value(&self, l: usize, w: usize) -> T {
         self.values_by_row[w * self.length + l]
     }
 }
@@ -609,7 +609,7 @@ impl From<&DynamicImage> for Pixels<RawColor> {
 }
 
 impl Pixels<RawColor> {
-    pub fn with_palette<C: Color>(self, palette: &[C]) -> Pixels<C> {
+    fn with_palette<C: Color>(self, palette: &[C]) -> Pixels<C> {
         let new_colors = self.values_by_row.into_iter()
             .map(|color| Self::find_similar_color(color, palette))
             .collect();
