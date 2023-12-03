@@ -71,6 +71,7 @@ impl<B> PlacedBrick<B> {
 }
 
 pub struct Mosaic<B, C> {
+    height_map: HeightMap<C>,
     chunks: Vec<Chunk<B, C>>
 }
 
@@ -89,6 +90,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let mut visited = BoolVec::filled_with(area, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
+        let mut height_map = HeightMap::new();
 
         /* An iterative breadth-first search that explores contiguous chunks of the mosaic with
            the same color, similar to the classic island-finding problem */
@@ -100,6 +102,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
                 let start_color = colors.value(start_l, start_w);
                 coords_to_visit.push_back((start_l, start_w));
+                height_map.insert(start_color, 1);
 
                 let mut coords_in_chunk = Vec::new();
                 let mut min_l = start_l;
@@ -176,7 +179,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             }
         }
 
-        Mosaic { chunks }
+        Mosaic { height_map, chunks }
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
@@ -206,18 +209,38 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             })
             .collect();
 
-        Mosaic { chunks }
+        Mosaic { height_map: self.height_map, chunks }
     }
 
     pub fn make_3d(self, height: u16, flip: bool) -> Self {
         let height_map = self.height_map(height, flip);
         Mosaic {
             chunks: self.chunks.into_iter()
-                .map(|chunk| {
+                .map(|mut chunk| {
                     let key = chunk.color;
-                    chunk.set_height(height_map[&key])
+                    let old_color_height = self.height_map[&key];
+                    let new_color_height = height_map[&key];
+                    let height_diff = new_color_height.abs_diff(old_color_height);
+                    let chunk_height = chunk.height;
+
+                    if old_color_height > new_color_height {
+                        if chunk.h == 0 {
+                            chunk = chunk.set_height(chunk_height - height_diff);
+                        } else {
+                            chunk.h -= height_diff;
+                        }
+                    } else {
+                        if chunk.h == 0 {
+                            chunk = chunk.set_height(chunk_height + height_diff);
+                        } else {
+                            chunk.h += height_diff;
+                        }
+                    }
+
+                    chunk
                 })
-                .collect()
+                .collect(),
+            height_map
         }
     }
 
