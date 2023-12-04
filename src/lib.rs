@@ -210,10 +210,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     fn new(chunks: Vec<Chunk<B, C>>, height_map: HeightMap<C>) -> Self {
         Mosaic {
             height_map,
-            chunks: chunks.into_iter().filter(|chunk| {
-                let has_width = chunk.ws_included.iter().any(|ws| !ws.is_empty());
-                chunk.length > 0 && has_width && chunk.height > 0
-            }).collect()
+            chunks: chunks.into_iter()
+                .filter(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0)
+                .collect()
         }
     }
 
