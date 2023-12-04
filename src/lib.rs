@@ -160,12 +160,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                         } else {
                             chunk.h -= height_diff;
                         }
+                    } else if chunk.h == 0 {
+                        chunk = chunk.set_height(chunk_height + height_diff);
                     } else {
-                        if chunk.h == 0 {
-                            chunk = chunk.set_height(chunk_height + height_diff);
-                        } else {
-                            chunk.h += height_diff;
-                        }
+                        chunk.h += height_diff;
                     }
 
                     chunk
@@ -375,7 +373,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     ws_included[rel_l].insert(rel_w as u16);
                 }
 
-                if bricks.len() > 0 {
+                if !bricks.is_empty() {
                     chunks.push(Chunk {
                         unit_brick: start_brick,
                         color: start_color,
