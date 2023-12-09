@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
 use boolvec::BoolVec;
 use image::{DynamicImage, GenericImageView, Pixel};
-use palette::color_difference::Wcag21RelativeContrast;
 use palette::Srgba;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
@@ -49,6 +48,7 @@ pub trait Brick: Copy + Hash + Eq {
 // PUBLIC STRUCTS
 // ====================
 
+#[derive(Clone)]
 pub struct PlacedBrick<B> {
     l: u16,
     w: u16,
@@ -91,18 +91,23 @@ impl<C: Color> PlacedColor<C> {
 }
 
 pub struct Mosaic<B, C> {
-    chunks: Vec<Chunk<B, C>>,
-    height_map: HeightMap<C>
+    chunks: Vec<Chunk<B, C>>
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
 
-    pub fn from_image(image: &DynamicImage, palette: &[C], unit_brick: B) -> Self {
+    pub fn from_image(image: &DynamicImage,
+                      palette: &[C],
+                      unit_brick: B,
+                      mut height_fn: impl FnMut(u16, u16, C) -> u16) -> Self {
         let raw_colors: Pixels<RawColor> = image.into();
         let colors = raw_colors.with_palette(palette);
-        let (chunks, height_map) = Mosaic::<B, C>::build_2d_chunks(
-            colors.length,
-            colors.values_by_row.len() / colors.length,
+        let length = colors.length;
+        let width = colors.values_by_row.len() / colors.length;
+
+        let mut chunks = Mosaic::<B, C>::build_2d_chunks(
+            length,
+            width,
             0,
             0,
             0,
@@ -110,7 +115,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             |l, w| colors.value(l, w),
             |_, _| false
         );
-        Mosaic::new(chunks, height_map)
+
+        chunks = Mosaic::<B, C>::build_3d_chunks(
+            chunks,
+            length,
+            width,
+            |l, w| height_fn(l, w, colors.value(l as usize, w as usize))
+        );
+
+        Mosaic::new(chunks)
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Self {
@@ -140,120 +153,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             })
             .collect();
 
-        Mosaic::new(chunks, self.height_map)
+        Mosaic::new(chunks)
     }
 
-    pub fn make_3d(self, height: u16, flip: bool) -> Self {
-        let height_map = self.height_map(height, flip);
-        Mosaic::new(
-            self.chunks.into_iter()
-                .map(|mut chunk| {
-                    let key = chunk.color;
-                    let old_color_height = self.height_map[&key];
-                    let new_color_height = height_map[&key];
-                    let height_diff = new_color_height.abs_diff(old_color_height);
-                    let chunk_height = chunk.height;
-
-                    if old_color_height > new_color_height {
-                        if chunk.h == 0 {
-                            chunk = chunk.set_height(chunk_height - height_diff);
-                        } else {
-                            chunk.h -= height_diff;
-                        }
-                    } else if chunk.h == 0 {
-                        chunk = chunk.set_height(chunk_height + height_diff);
-                    } else {
-                        chunk.h += height_diff;
-                    }
-
-                    chunk
-                })
-                .collect(),
-            height_map
-        )
-    }
-
-    pub fn retexture_top<F: FnMut(PlacedColor<C>) -> B>(self, mut brick_mapper: F) -> TexturedMosaic<B, C> {
-        let mut new_chunks = Vec::with_capacity(self.chunks.len());
-
-        for chunk in self.chunks {
-            if chunk.h + chunk.height == self.height_map[&chunk.color] {
-                let (mut chunks, _) = Mosaic::<B, C>::build_2d_chunks(
-                    chunk.length as usize,
-                    chunk.width as usize,
-                    chunk.l,
-                    chunk.w,
-                    chunk.h + chunk.height - 1,
-                    |l, w| assert_unit_brick(brick_mapper(PlacedColor {
-                        l: chunk.l + l as u16,
-                        w: chunk.w + w as u16,
-                        color: chunk.color
-                    })),
-                    |_, _| chunk.color,
-                    |l, w| {
-                        let ws_included: &BTreeSet<u16> = &chunk.ws_included[l];
-                        ws_included.contains(&(w as u16))
-                    }
-                );
-                new_chunks.append(&mut chunks);
-
-                let chunk_height = chunk.height;
-                new_chunks.push(chunk.set_height(chunk_height - 1));
-            } else {
-                new_chunks.push(chunk);
-            }
-        }
-
-        TexturedMosaic { mosaic: Mosaic::new(new_chunks, self.height_map) }
-    }
-
-    fn new(chunks: Vec<Chunk<B, C>>, height_map: HeightMap<C>) -> Self {
+    fn new(chunks: Vec<Chunk<B, C>>) -> Self {
         Mosaic {
-            height_map,
             chunks: chunks.into_iter()
                 .filter(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0)
                 .collect()
         }
-    }
-
-    fn height_map(&self, height: u16, flip: bool) -> HeightMap<C> {
-        if height == 0 {
-            return HeightMap::new();
-        }
-
-        let (min_luma, max_luma) = self.chunks.iter()
-            .map(|chunk| {
-                let srgba_f32: Srgba<f32> = chunk.color.into().into_format();
-                srgba_f32.relative_luminance().luma
-            })
-            .fold((1.0f32, 0.0f32), |(min, max), luma| (min.min(luma), max.max(luma)));
-
-        let range = max_luma - min_luma;
-        let max_layer_index = height - 1;
-
-        let mut height_map = HeightMap::new();
-
-        self.chunks.iter().for_each(|chunk| {
-            let color = chunk.color;
-            let entry = height_map.entry(color);
-            entry.or_insert_with(|| {
-                let srgba_f32: Srgba<f32> = color.into().into_format();
-                let luma = srgba_f32.relative_luminance().luma;
-
-                // Normalize the luma within the range of luma values found in the image
-                let mut range_rel_luma = (luma - min_luma) / range;
-                range_rel_luma = if flip { 1.0 - range_rel_luma } else { range_rel_luma };
-
-                /* height must be u16 because the max integer a 32-bit float can represent
-                   exactly is 2^24 + 1 (more than u16::MAX but less than u32::MAX). Add one
-                   because every layer must be at least 1 plate tall, while index starts at
-                   0. */
-                (range_rel_luma * max_layer_index as f32).round() as u16 + 1
-
-            });
-        });
-
-        height_map
     }
 
     fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
@@ -289,11 +197,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                        region_h: u16,
                        mut bricks: impl FnMut(usize, usize) -> B,
                        colors: impl Fn(usize, usize) -> C,
-                       is_empty: impl Fn(usize, usize) -> bool) -> (Vec<Chunk<B, C>>, HeightMap<C>) {
+                       is_empty: impl Fn(usize, usize) -> bool) -> Vec<Chunk<B, C>> {
         let mut visited = BoolVec::filled_with(region_length * region_width, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
-        let mut height_map = HeightMap::new();
 
         /* An iterative breadth-first search that explores contiguous chunks of the mosaic with
            the same brick type and color, similar to the classic island-finding problem */
@@ -306,7 +213,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 let start_brick = assert_unit_brick(bricks(start_l, start_w));
                 let start_color = colors(start_l, start_w);
                 coords_to_visit.push_back((start_l, start_w));
-                height_map.insert(start_color, 1);
 
                 let mut coords_in_chunk = Vec::new();
                 let mut min_l = start_l;
@@ -389,7 +295,58 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             }
         }
 
-        (chunks, height_map)
+        chunks
+    }
+
+    fn build_3d_chunks(chunks: Vec<Chunk<B, C>>,
+                       length: usize,
+                       width: usize,
+                       mut height: impl FnMut(u16, u16) -> u16) -> Vec<Chunk<B, C>> {
+        let height_map = HeightMap::from_fn(
+            |l, w| height(l as u16, w as u16),
+            length,
+            width
+        );
+        let heights = height_map.uniques();
+
+        let mut new_chunks = Vec::new();
+        let mut last_height = 0;
+
+        for chunk in chunks {
+            assert_eq!(0, chunk.h);
+
+            for &height in &heights {
+                let mut new_chunk = Chunk {
+                    unit_brick: chunk.unit_brick,
+                    color: chunk.color,
+                    l: chunk.l,
+                    w: chunk.w,
+                    h: last_height,
+                    length: chunk.length,
+                    width: chunk.width,
+                    height: chunk.height,
+                    ws_included: Vec::new(),
+                    bricks: chunk.bricks.clone(),
+                };
+
+                for l in 0..chunk.length {
+                    let mut ws_included = BTreeSet::new();
+
+                    for &w in chunk.ws_included[l as usize].iter() {
+                        if height_map.value(l as usize, w as usize) >= height {
+                            ws_included.insert(w);
+                        }
+                    }
+
+                    new_chunk.ws_included.push(ws_included);
+                }
+
+                last_height = height;
+                new_chunks.push(new_chunk.set_height(height - last_height));
+            }
+        }
+
+        new_chunks
     }
 
 }
@@ -410,7 +367,7 @@ impl<B: Brick, C: Color> TexturedMosaic<B, C> {
 
 type RawColor = Srgba<u8>;
 
-type HeightMap<C> = HashMap<C, u16>;
+type HeightMap = Pixels<u16>;
 
 // ====================
 // PRIVATE FUNCTIONS
@@ -705,8 +662,26 @@ struct Pixels<T> {
 }
 
 impl<T: Copy> Pixels<T> {
+    fn from_fn(mut f: impl FnMut(usize, usize) -> T, length: usize, width: usize) -> Self {
+        let mut values_by_row = Vec::new();
+
+        for w in 0..width {
+            for l in 0..length {
+                values_by_row.push(f(l, w));
+            }
+        }
+
+        Pixels { values_by_row, length }
+    }
+
     fn value(&self, l: usize, w: usize) -> T {
         self.values_by_row[w * self.length + l]
+    }
+}
+
+impl<T: Copy + Ord> Pixels<T> {
+    fn uniques(&self) -> BTreeSet<T> {
+        self.values_by_row.iter().copied().collect::<BTreeSet<_>>()
     }
 }
 
