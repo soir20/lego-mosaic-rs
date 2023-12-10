@@ -310,10 +310,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let heights = height_map.uniques();
 
         let mut new_chunks = Vec::new();
-        let mut last_height = 0;
 
         for chunk in chunks {
             assert_eq!(0, chunk.h);
+            let mut last_height = 0;
 
             for &height in &heights {
                 let mut new_chunk = Chunk {
@@ -341,8 +341,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     new_chunk.ws_included.push(ws_included);
                 }
 
-                last_height = height;
                 new_chunks.push(new_chunk.set_height(height - last_height));
+                last_height = height;
             }
         }
 
@@ -746,5 +746,232 @@ impl Pixels<RawColor> {
     fn component_distance_squared(component1: u8, component2: u8) -> u32 {
         let distance = component1.abs_diff(component2) as u32;
         distance * distance
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+    use image::{Rgba, RgbaImage};
+    use image::DynamicImage::ImageRgba8;
+    use super::*;
+
+    #[derive(Clone, Copy, Eq, PartialEq)]
+    pub struct TestBrick<'a> {
+        id: &'a str,
+        rotation_count: u8,
+        length: u8,
+        width: u8,
+        height: u8,
+        unit_brick: Option<&'a TestBrick<'a>>
+    }
+
+    impl Hash for TestBrick<'_> {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            state.write(self.id.as_bytes());
+            state.write_u8(self.rotation_count);
+        }
+    }
+
+    impl Brick for TestBrick<'_> {
+        fn length(&self) -> u8 {
+            self.length
+        }
+
+        fn width(&self) -> u8 {
+            self.width
+        }
+
+        fn height(&self) -> u8 {
+            self.height
+        }
+
+        fn unit_brick(&self) -> Self {
+            match self.unit_brick {
+                None => *self,
+                Some(unit_brick) => *unit_brick
+            }
+        }
+
+        fn rotate_90(&self) -> Self {
+            TestBrick {
+                id: self.id,
+                rotation_count: (self.rotation_count + 1) % 4,
+                length: self.width,
+                width: self.length,
+                height: self.height,
+                unit_brick: self.unit_brick,
+            }
+        }
+    }
+
+    const UNIT_BRICK: TestBrick = TestBrick {
+        id: "1x1x1",
+        rotation_count: 0,
+        length: 1,
+        width: 1,
+        height: 1,
+        unit_brick: None,
+    };
+
+    #[derive(Copy, Clone, Debug, Eq)]
+    pub struct TestColor {
+        value: Srgba<u8>
+    }
+
+    impl TestColor {
+        pub const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+            TestColor { value: Srgba::new(red, green, blue, alpha), }
+        }
+    }
+
+    impl Default for TestColor {
+        fn default() -> Self {
+            TestColor::new(0, 0, 0, 0)
+        }
+    }
+
+    impl PartialEq<Self> for TestColor {
+        fn eq(&self, other: &Self) -> bool {
+            self.value == other.value
+        }
+    }
+
+    impl Hash for TestColor {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            state.write_u8(self.value.red);
+            state.write_u8(self.value.green);
+            state.write_u8(self.value.blue);
+            state.write_u8(self.value.alpha);
+        }
+    }
+
+    impl From<TestColor> for Srgba<u8> {
+        fn from(color: TestColor) -> Self {
+            color.value
+        }
+    }
+
+    impl Color for TestColor {}
+
+    fn color_to_srgba(color: &Rgba<u8>) -> TestColor {
+        TestColor::new(color.0[0], color.0[1], color.0[2], color.0[3])
+    }
+
+    fn vec_to_srgba(colors: Vec<Rgba<u8>>) -> Vec<TestColor> {
+        colors.into_iter()
+            .map(|color| TestColor::new(color.0[0], color.0[1], color.0[2], color.0[3]))
+            .collect()
+    }
+
+    fn assert_colors_match_img(img: &RgbaImage, chunk: &Chunk<TestBrick, TestColor>) {
+        for l in 0..chunk.length {
+            for &w in &chunk.ws_included[l as usize] {
+                assert_eq!(color_to_srgba(&img.get_pixel((l + chunk.l) as u32, (w + chunk.w) as u32)), chunk.color);
+            }
+        }
+    }
+
+    fn make_test_img() -> (RgbaImage, Vec<TestColor>) {
+        let color1 = Rgba([235, 64, 52, 255]);
+        let color2 = Rgba([235, 232, 52, 255]);
+        let color3 = Rgba([52, 235, 55, 255]);
+        let color4 = Rgba([52, 147, 235, 255]);
+        let mut img = RgbaImage::new(4, 5);
+
+        img.put_pixel(0, 0, color1);
+        img.put_pixel(1, 0, color1);
+        img.put_pixel(2, 0, color1);
+        img.put_pixel(3, 0, color4);
+
+        img.put_pixel(0, 1, color1);
+        img.put_pixel(1, 1, color4);
+        img.put_pixel(2, 1, color4);
+        img.put_pixel(3, 1, color4);
+
+        img.put_pixel(0, 2, color4);
+        img.put_pixel(1, 2, color4);
+        img.put_pixel(2, 2, color4);
+        img.put_pixel(3, 2, color2);
+
+        img.put_pixel(0, 3, color3);
+        img.put_pixel(1, 3, color3);
+        img.put_pixel(2, 3, color3);
+        img.put_pixel(3, 3, color3);
+
+        img.put_pixel(0, 4, color4);
+        img.put_pixel(1, 4, color3);
+        img.put_pixel(2, 4, color3);
+        img.put_pixel(3, 4, color3);
+
+        let palette = vec_to_srgba(vec![color1, color2, color3, color4]);
+
+        (img, palette)
+    }
+
+    #[test]
+    fn test_height_all_zeroes() {
+        let (img, palette) = make_test_img();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(img.clone()),
+            &palette[..],
+            UNIT_BRICK,
+            |_, _, _| 0
+        );
+
+        assert_eq!(0, mosaic.chunks.len());
+    }
+
+    #[test]
+    fn test_height_all_ones() {
+        let (img, palette) = make_test_img();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(img.clone()),
+            &palette[..],
+            UNIT_BRICK,
+            |_, _, _| 1
+        );
+
+        assert_eq!(5, mosaic.chunks.len());
+        let mut total_bricks = 0;
+        for chunk in mosaic.chunks {
+            assert_eq!(1, chunk.height);
+            assert_colors_match_img(&img, &chunk);
+            total_bricks += chunk.bricks.len();
+
+            chunk.bricks.iter().for_each(|brick| {
+                assert_unit_brick(brick.brick);
+                assert_eq!(0, brick.h);
+            });
+        }
+        assert_eq!(4 * 5, total_bricks);
+    }
+
+    #[test]
+    fn test_height_all_twos() {
+        let (img, palette) = make_test_img();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(img.clone()),
+            &palette[..],
+            UNIT_BRICK,
+            |_, _, _| 2
+        );
+
+        assert_eq!(5, mosaic.chunks.len());
+        let mut total_bricks = 0;
+        for chunk in mosaic.chunks {
+            assert_eq!(2, chunk.height);
+            assert_colors_match_img(&img, &chunk);
+            total_bricks += chunk.bricks.len();
+
+            chunk.bricks.iter().for_each(|brick| {
+                assert_unit_brick(brick.brick);
+                assert!(brick.h == 0 || brick.h == 1);
+            });
+        }
+        assert_eq!(4 * 5 * 2, total_bricks);
     }
 }
