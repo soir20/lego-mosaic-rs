@@ -307,12 +307,18 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             length,
             width
         );
-        let heights = height_map.uniques();
 
         let mut new_chunks = Vec::new();
 
         for chunk in chunks {
             assert_eq!(0, chunk.h);
+
+            let heights = (0..chunk.length as usize).into_iter()
+                .flat_map(|l| chunk.ws_included[l].iter()
+                    .map(move |&w| (l, w as usize))
+                )
+                .map(|(l, w)| height_map.value(chunk.l as usize + l, chunk.w as usize + w))
+                .collect::<BTreeSet<_>>();
             let mut last_height = 0;
 
             for &height in &heights {
@@ -324,9 +330,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     h: last_height,
                     length: chunk.length,
                     width: chunk.width,
-                    height: chunk.height,
-                    ws_included: Vec::new(),
-                    bricks: chunk.bricks.clone(),
+                    height: height - last_height,
+                    ws_included: Vec::with_capacity(chunk.ws_included.len()),
+                    bricks: Vec::with_capacity(chunk.bricks.len()),
                 };
 
                 for l in 0..chunk.length {
@@ -335,13 +341,22 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     for &w in chunk.ws_included[l as usize].iter() {
                         if height_map.value(l as usize, w as usize) >= height {
                             ws_included.insert(w);
+
+                            for h in 0..new_chunk.height {
+                                new_chunk.bricks.push(PlacedBrick {
+                                    l,
+                                    w,
+                                    h,
+                                    brick: new_chunk.unit_brick,
+                                });
+                            }
                         }
                     }
 
                     new_chunk.ws_included.push(ws_included);
                 }
 
-                new_chunks.push(new_chunk.set_height(height - last_height));
+                new_chunks.push(new_chunk);
                 last_height = height;
             }
         }
@@ -679,12 +694,6 @@ impl<T: Copy> Pixels<T> {
     }
 }
 
-impl<T: Copy + Ord> Pixels<T> {
-    fn uniques(&self) -> BTreeSet<T> {
-        self.values_by_row.iter().copied().collect::<BTreeSet<_>>()
-    }
-}
-
 impl From<&DynamicImage> for Pixels<RawColor> {
     fn from(image: &DynamicImage) -> Self {
         let length = image.width() as usize;
@@ -973,5 +982,35 @@ mod tests {
             });
         }
         assert_eq!(4 * 5 * 2, total_bricks);
+    }
+
+    #[test]
+    fn test_height_varied() {
+        let (img, palette) = make_test_img();
+
+        let heights = [
+            [5, 2, 1, 1],
+            [5, 5, 2, 2],
+            [1, 0, 3, 2],
+            [4, 3, 1, 2],
+            [3, 1, 1, 4]
+        ];
+        let expected_total_bricks: u16 = heights.iter()
+            .map(|row| row.iter().sum::<u16>())
+            .sum();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(img.clone()),
+            &palette[..],
+            UNIT_BRICK,
+            |l, w, _| heights[w as usize][l as usize]
+        );
+
+        let mut total_bricks = 0;
+        for chunk in mosaic.chunks {
+            assert_colors_match_img(&img, &chunk);
+            total_bricks += chunk.bricks.len();
+        }
+        assert_eq!(expected_total_bricks as usize, total_bricks);
     }
 }
