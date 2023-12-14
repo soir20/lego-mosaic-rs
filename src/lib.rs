@@ -103,7 +103,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let raw_colors: Pixels<RawColor> = image.into();
         let colors = raw_colors.with_palette(palette);
         let length = colors.length;
-        let width = colors.values_by_row.len() / colors.length;
+        let width = colors.values_by_row.len() / colors.length.max(1);
 
         let mut chunks = Mosaic::<B, C>::build_2d_chunks(
             length,
@@ -561,7 +561,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
     }
 
     fn fits(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u16>]) -> bool {
-        if u16::MAX_VALUE - length < l || u16::MAX_VALUE - width < w {
+        if u16::MAX - (length as u16) < l || u16::MAX - (width as u16) < w {
             return false;
         }
 
@@ -843,6 +843,20 @@ mod tests {
         let palette = vec_to_srgba(vec![color1, color2, color3, color4]);
 
         (img, palette)
+    }
+
+    #[test]
+    fn test_empty_mosaic() {
+        let (_, palette) = make_test_img();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(RgbaImage::new(0, 0)),
+            &palette[..],
+            UNIT_BRICK,
+            |_, _, _| 1
+        );
+
+        assert_eq!(0, mosaic.chunks.len());
     }
 
     #[test]
