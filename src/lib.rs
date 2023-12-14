@@ -561,6 +561,10 @@ impl<B: Brick, C: Color> Chunk<B, C> {
     }
 
     fn fits(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u16>]) -> bool {
+        if u16::MAX_VALUE - length < l || u16::MAX_VALUE - width < w {
+            return false;
+        }
+
         let max_l = l + length as u16;
         let max_w = w + width as u16;
 
