@@ -954,4 +954,30 @@ mod tests {
         }
         assert_eq!(expected_total_bricks as usize, total_bricks);
     }
+
+    #[test]
+    fn test_empty_palette() {
+        let (img, _) = make_test_img();
+
+        let mosaic = Mosaic::from_image(
+            &ImageRgba8(img.clone()),
+            &[],
+            UNIT_BRICK,
+            |_, _, _| 1
+        );
+
+        assert_eq!(1, mosaic.chunks.len());
+        let mut total_bricks = 0;
+        for chunk in mosaic.chunks {
+            assert_eq!(1, chunk.height);
+            total_bricks += chunk.bricks.len();
+            assert_eq!(TestColor::new(0, 0, 0, 0), chunk.color);
+
+            chunk.bricks.iter().for_each(|brick| {
+                assert_unit_brick(brick.brick);
+                assert_eq!(0, brick.h);
+            });
+        }
+        assert_eq!(4 * 5, total_bricks);
+    }
 }
