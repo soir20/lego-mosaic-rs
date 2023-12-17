@@ -75,26 +75,6 @@ impl<B> PlacedBrick<B> {
     }
 }
 
-pub struct PlacedColor<C> {
-    l: u16,
-    w: u16,
-    color: C
-}
-
-impl<C: Color> PlacedColor<C> {
-    pub fn l(&self) -> u16 {
-        self.l
-    }
-
-    pub fn w(&self) -> u16 {
-        self.w
-    }
-
-    pub fn color(&self) -> C {
-        self.color
-    }
-}
-
 #[derive(Debug)]
 pub struct Mosaic<B, C> {
     chunks: Vec<Chunk<B, C>>
