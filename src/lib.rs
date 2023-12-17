@@ -329,7 +329,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let mut slice_h = min_h;
 
         for height in heights {
-            let coords_in_slice = coords_in_chunk.get(&slice_h).unwrap();
+            let coords_in_slice = &coords_in_chunk[&slice_h];
             let mut bricks = Vec::with_capacity(coords_in_slice.len());
             let mut ws_included = vec![BTreeSet::new(); chunk_length as usize];
 
