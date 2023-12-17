@@ -95,7 +95,6 @@ pub struct Mosaic<B, C> {
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
-
     pub fn from_image(image: &DynamicImage,
                       palette: &[C],
                       unit_brick: B,
@@ -105,22 +104,12 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         let length = colors.length;
         let width = colors.values_by_row.len() / colors.length.max(1);
 
-        let mut chunks = Mosaic::<B, C>::build_2d_chunks(
-            length,
-            width,
-            0,
-            0,
-            0,
-            |_, _| unit_brick,
-            |l, w| colors.value(l, w),
-            |_, _| false
-        );
-
-        chunks = Mosaic::<B, C>::build_3d_chunks(
-            chunks,
-            length,
-            width,
-            |l, w| height_fn(l, w, colors.value(l as usize, w as usize))
+        let chunks = Mosaic::<B, C>::build_chunks(
+            length as u16,
+            width as u16,
+            |l, w| height_fn(l, w, colors.value(l as usize, w as usize)),
+            |_, _, _| unit_brick,
+            |l, w| colors.value(l as usize, w as usize)
         );
 
         Mosaic::new(chunks)
@@ -165,7 +154,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 
     fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
-
         /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
            a layer of that h size. */
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
@@ -175,7 +163,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .into_iter()
             .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
             .map(|(height, bricks)| {
-
                 /* Sort bricks by area so that larger bricks are chosen first. We don't need to
                    sort by volume because the brick-filling algorithm only needs to consider 2D
                    space. */
@@ -187,110 +174,109 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 (height as u16, sizes)
             })
             .collect()
-
     }
 
-    fn build_2d_chunks(region_length: usize,
-                       region_width: usize,
-                       region_l: u16,
-                       region_w: u16,
-                       region_h: u16,
-                       mut bricks: impl FnMut(usize, usize) -> B,
-                       colors: impl Fn(usize, usize) -> C,
-                       is_empty: impl Fn(usize, usize) -> bool) -> Vec<Chunk<B, C>> {
-        let mut visited = BoolVec::filled_with(region_length * region_width, false);
+    fn build_chunks(length: u16,
+                    width: u16,
+                    mut height_fn: impl FnMut(u16, u16) -> u16,
+                    mut brick_fn: impl FnMut(u16, u16, u16) -> B,
+                    color_fn: impl Fn(u16, u16) -> C) -> Vec<Chunk<B, C>> {
+        let height_map = HeightMap::from_fn(
+            |l, w| height_fn(l as u16, w as u16),
+            length as usize,
+            width as usize
+        );
+        let max_height = height_map.max().map_or(0, |max| *max);
+        let mut visited = BoolVec::filled_with(length as usize * width as usize * max_height as usize, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
 
         /* An iterative breadth-first search that explores contiguous chunks of the mosaic with
            the same brick type and color, similar to the classic island-finding problem */
-        for start_w in 0..region_width {
-            for start_l in 0..region_length {
-                if was_visited(&visited, start_l, start_w, region_length, &is_empty) {
-                    continue;
-                }
+        for start_w in 0..width {
+            for start_l in 0..length {
+                let start_height = height_map.value(start_l as usize, start_w as usize);
 
-                let start_brick = assert_unit_brick(bricks(start_l, start_w));
-                let start_color = colors(start_l, start_w);
-                coords_to_visit.push_back((start_l, start_w));
-
-                let mut coords_in_chunk = Vec::new();
-                let mut min_l = start_l;
-                let mut min_w = start_w;
-                let mut max_l = start_l;
-                let mut max_w = start_w;
-
-                while !coords_to_visit.is_empty() {
-                    let (l, w) = coords_to_visit.pop_front().unwrap();
-
-                    // Avoid an infinite loop by visiting no point twice
-                    if was_visited(&visited, l, w, region_length, &is_empty) {
+                for start_h in 0..start_height {
+                    if was_visited(&visited, start_l, start_w, start_h, length, width) {
                         continue;
                     }
-                    visited.set(w * region_length + l, true);
 
-                    coords_in_chunk.push((l, w));
+                    let start_brick = assert_unit_brick(brick_fn(start_l, start_w, start_h));
+                    let start_color = color_fn(start_l, start_w);
+                    coords_to_visit.push_back((start_l, start_w, start_h));
 
-                    min_l = min_l.min(l);
-                    min_w = min_w.min(w);
-                    max_l = max_l.max(l);
-                    max_w = max_w.max(w);
+                    let mut coords_in_chunk = BTreeMap::new();
+                    let mut min_l = start_l;
+                    let mut min_w = start_w;
+                    let mut max_l = start_l;
+                    let mut max_w = start_w;
+                    let mut min_h = start_h;
 
-                    // Add position to the left to explore later
-                    if l > 0 && is_new_pos::<B, C>(&visited, &mut bricks, &colors, &is_empty, l - 1, w, region_length, start_brick, start_color) {
-                        coords_to_visit.push_back((l - 1, w));
+                    while !coords_to_visit.is_empty() {
+                        let (l, w, h) = coords_to_visit.pop_front().unwrap();
+                        let height = height_map.value(l as usize, w as usize);
+
+                        // Avoid an infinite loop by visiting no point twice
+                        if was_visited(&visited, l, w, h, length, width) {
+                            continue;
+                        }
+                        visited.set(visited_index(l, w, h, length, width), true);
+
+                        coords_in_chunk.entry(h).or_insert_with(BTreeSet::new).insert((l, w));
+
+                        min_l = min_l.min(l);
+                        min_w = min_w.min(w);
+                        max_l = max_l.max(l);
+                        max_w = max_w.max(w);
+                        min_h = min_h.min(h);
+
+                        // Add position to the west to explore later
+                        if l > 0 && height_map.value(l as usize - 1, w as usize) > h
+                            && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l - 1, w, h, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l - 1, w, h));
+                        }
+
+                        // Add position to the east to explore later
+                        if l < length - 1 && height_map.value(l as usize + 1, w as usize) > h
+                            && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l + 1, w, h, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l + 1, w, h));
+                        }
+
+                        // Add position to the south to explore later
+                        if w > 0 && height_map.value(l as usize, w as usize - 1) > h
+                            && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l, w - 1, h, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l, w - 1, h));
+                        }
+
+                        // Add position to the north to explore later
+                        if w < width - 1 && height_map.value(l as usize, w as usize + 1) > h
+                            && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l, w + 1, h, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l, w + 1, h));
+                        }
+
+                        // Add position below to explore later
+                        if h > 0 && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l, w, h - 1, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l, w, h - 1));
+                        }
+
+                        // Add position above to explore later
+                        if h < height - 1 && is_new_pos::<B, C>(&visited, &mut brick_fn, &color_fn, l, w, h + 1, length, width, start_brick, start_color) {
+                            coords_to_visit.push_back((l, w, h + 1));
+                        }
                     }
 
-                    // Add position to the right to explore later
-                    if l < region_length - 1 && is_new_pos::<B, C>(&visited, &mut bricks, &colors, &is_empty, l + 1, w, region_length, start_brick, start_color) {
-                        coords_to_visit.push_back((l + 1, w));
-                    }
-
-                    // Add position below to explore later
-                    if w > 0 && is_new_pos::<B, C>(&visited, &mut bricks, &colors, &is_empty, l, w - 1, region_length, start_brick, start_color) {
-                        coords_to_visit.push_back((l, w - 1));
-                    }
-
-                    // Add position above to explore later
-                    if w < region_width - 1 && is_new_pos::<B, C>(&visited, &mut bricks, &colors, &is_empty, l, w + 1, region_length, start_brick, start_color) {
-                        coords_to_visit.push_back((l, w + 1));
-                    }
-
-                }
-
-                // Compute relative coordinates for every point inside the fully-explored chunk
-                let chunk_length = max_l - min_l + 1;
-                let chunk_width = max_w - min_w + 1;
-                let mut bricks = Vec::with_capacity(coords_in_chunk.len());
-                let mut ws_included = vec![BTreeSet::new(); chunk_length];
-
-                for (l, w) in coords_in_chunk {
-                    let rel_l = l - min_l;
-                    let rel_w = w - min_w;
-
-                    bricks.push(PlacedBrick {
-                        l: rel_l as u16,
-                        w: rel_w as u16,
-                        h: 0,
-                        brick: start_brick
-                    });
-
-                    ws_included[rel_l].insert(rel_w as u16);
-                }
-
-                if !bricks.is_empty() {
-                    chunks.push(Chunk {
-                        unit_brick: start_brick,
-                        color: start_color,
-                        l: region_l + min_l as u16,
-                        w: region_w + min_w as u16,
-                        h: region_h,
-                        length: chunk_length as u16,
-                        width: chunk_width as u16,
-                        height: 1,
-                        ws_included,
-                        bricks,
-                    })
+                    let mut slices = Mosaic::<B, C>::slice_chunk(
+                        coords_in_chunk,
+                        start_brick,
+                        start_color,
+                        min_l,
+                        max_l,
+                        min_w,
+                        max_w,
+                        min_h
+                    );
+                    chunks.append(&mut slices);
                 }
             }
         }
@@ -298,72 +284,79 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         chunks
     }
 
-    fn build_3d_chunks(chunks: Vec<Chunk<B, C>>,
-                       length: usize,
-                       width: usize,
-                       mut height: impl FnMut(u16, u16) -> u16) -> Vec<Chunk<B, C>> {
-        let height_map = HeightMap::from_fn(
-            |l, w| height(l as u16, w as u16),
-            length,
-            width
-        );
+    fn slice_chunk(coords_in_chunk: BTreeMap<u16, BTreeSet<(u16, u16)>>,
+                   unit_brick: B, color: C, min_l: u16, max_l: u16,
+                   min_w: u16, max_w: u16, min_h: u16) -> Vec<Chunk<B, C>> {
+        if coords_in_chunk.is_empty() {
+            return Vec::new();
+        }
 
-        let mut new_chunks = Vec::new();
+        let mut heights = Vec::new();
+        let mut height: u16 = 0;
+        let mut last_coords = coords_in_chunk.values().next().unwrap();
+        let mut iter = coords_in_chunk.iter();
 
-        for chunk in chunks {
-            assert_eq!(0, chunk.h);
-
-            let heights = (0..chunk.length as usize).into_iter()
-                .flat_map(|l| chunk.ws_included[l].iter()
-                    .map(move |&w| (l, w as usize))
-                )
-                .map(|(l, w)| height_map.value(chunk.l as usize + l, chunk.w as usize + w))
-                .collect::<BTreeSet<_>>();
-            let mut last_height = 0;
-
-            for &height in &heights {
-                let mut new_chunk = Chunk {
-                    unit_brick: chunk.unit_brick,
-                    color: chunk.color,
-                    l: chunk.l,
-                    w: chunk.w,
-                    h: last_height,
-                    length: chunk.length,
-                    width: chunk.width,
-                    height: height - last_height,
-                    ws_included: Vec::with_capacity(chunk.ws_included.len()),
-                    bricks: Vec::with_capacity(chunk.bricks.len()),
-                };
-
-                for l in 0..chunk.length {
-                    let mut ws_included = BTreeSet::new();
-
-                    for &w in chunk.ws_included[l as usize].iter() {
-                        if height_map.value(l as usize, w as usize) >= height {
-                            ws_included.insert(w);
-
-                            for h in 0..new_chunk.height {
-                                new_chunk.bricks.push(PlacedBrick {
-                                    l,
-                                    w,
-                                    h,
-                                    brick: new_chunk.unit_brick,
-                                });
-                            }
-                        }
-                    }
-
-                    new_chunk.ws_included.push(ws_included);
+        loop {
+            if let Some((_, coords)) = iter.next() {
+                if last_coords != coords {
+                    heights.push(height);
+                    height = 0;
                 }
 
-                new_chunks.push(new_chunk);
-                last_height = height;
+                last_coords = coords;
+                height += 1;
+            } else {
+                if height > 0 {
+                    heights.push(height);
+                }
+                break
             }
         }
 
-        new_chunks
-    }
+        // Compute relative coordinates for every point inside the fully-explored chunk
+        let chunk_length = max_l - min_l + 1;
+        let chunk_width = max_w - min_w + 1;
 
+        let mut slices = Vec::new();
+        let mut slice_h = min_h;
+
+        for height in heights {
+            let coords_in_slice = coords_in_chunk.get(&slice_h).unwrap();
+            let mut bricks = Vec::with_capacity(coords_in_slice.len());
+            let mut ws_included = vec![BTreeSet::new(); chunk_length as usize];
+
+            for &(l, w) in coords_in_slice {
+                let rel_l = l - min_l;
+                let rel_w = w - min_w;
+                ws_included[rel_l as usize].insert(rel_w);
+
+                for rel_h in 0..height {
+                    bricks.push(PlacedBrick {
+                        l: rel_l,
+                        w: rel_w,
+                        h: rel_h,
+                        brick: unit_brick,
+                    })
+                }
+            }
+
+            slices.push(Chunk {
+                unit_brick,
+                color,
+                l: min_l,
+                w: min_w,
+                h: slice_h,
+                length: chunk_length,
+                width: chunk_width,
+                height,
+                ws_included,
+                bricks,
+            });
+            slice_h += height;
+        }
+
+        slices
+    }
 }
 
 pub struct TexturedMosaic<B, C> {
@@ -388,20 +381,25 @@ type HeightMap = Pixels<u16>;
 // PRIVATE FUNCTIONS
 // ====================
 
-fn was_visited(visited: &BoolVec, l: usize, w: usize, length: usize, is_empty: impl Fn(usize, usize) -> bool) -> bool {
-    !is_empty(l, w) && visited.get(w * length + l).unwrap()
+fn visited_index(l: u16, w: u16, h: u16, length: u16, width: u16) -> usize {
+    h as usize * length as usize * width as usize + w as usize * length as usize + l as usize
+}
+
+fn was_visited(visited: &BoolVec, l: u16, w: u16, h: u16, length: u16, width: u16) -> bool {
+    visited.get(visited_index(l, w, h, length, width)).unwrap()
 }
 
 fn is_new_pos<B: Brick, C: Color>(visited: &BoolVec,
-                                  mut bricks: impl FnMut(usize, usize) -> B,
-                                  colors: impl Fn(usize, usize) -> C,
-                                  is_empty: impl Fn(usize, usize) -> bool,
-                                  l: usize,
-                                  w: usize,
-                                  length: usize,
+                                  mut brick_fn: impl FnMut(u16, u16, u16) -> B,
+                                  color_fn: impl Fn(u16, u16) -> C,
+                                  l: u16,
+                                  w: u16,
+                                  h: u16,
+                                  length: u16,
+                                  width: u16,
                                   start_brick: B,
                                   start_color: C) -> bool {
-    !was_visited(visited, l, w, length, is_empty) && bricks(l, w) == start_brick && colors(l, w) == start_color
+    !was_visited(visited, l, w, h, length, width) && brick_fn(l, w, h) == start_brick && color_fn(l, w) == start_color
 }
 
 fn assert_unit_brick<B: Brick>(brick: B) -> B {
@@ -618,6 +616,12 @@ impl<T: Copy> Pixels<T> {
 
     fn value(&self, l: usize, w: usize) -> T {
         self.values_by_row[w * self.length + l]
+    }
+}
+
+impl<T: Ord> Pixels<T> {
+    fn max(&self) -> Option<&T> {
+        self.values_by_row.iter().max()
     }
 }
 
