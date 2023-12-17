@@ -175,29 +175,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         }
     }
 
-    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
-        /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
-           a layer of that h size. */
-        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
-            partitions
-        })
-            .into_iter()
-            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
-            .map(|(height, bricks)| {
-                /* Sort bricks by area so that larger bricks are chosen first. We don't need to
-                   sort by volume because the brick-filling algorithm only needs to consider 2D
-                   space. */
-                let mut sizes: Vec<_> = bricks.into_iter()
-                    .map(|brick| AreaSortedBrick { brick })
-                    .collect();
-                sizes.sort();
-
-                (height as u16, sizes)
-            })
-            .collect()
-    }
-
     fn build_chunks(length: u16,
                     width: u16,
                     max_height: u16,
@@ -373,6 +350,29 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         }
 
         slices
+    }
+
+    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+        /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
+           a layer of that h size. */
+        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
+            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
+            partitions
+        })
+            .into_iter()
+            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
+            .map(|(height, bricks)| {
+                /* Sort bricks by area so that larger bricks are chosen first. We don't need to
+                   sort by volume because the brick-filling algorithm only needs to consider 2D
+                   space. */
+                let mut sizes: Vec<_> = bricks.into_iter()
+                    .map(|brick| AreaSortedBrick { brick })
+                    .collect();
+                sizes.sort();
+
+                (height as u16, sizes)
+            })
+            .collect()
     }
 }
 
