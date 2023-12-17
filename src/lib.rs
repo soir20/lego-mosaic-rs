@@ -48,7 +48,12 @@ pub trait Brick: Copy + Hash + Eq {
 // PUBLIC STRUCTS
 // ====================
 
-#[derive(Clone)]
+#[derive(Debug, Eq, PartialEq)]
+pub enum Error<B> {
+    NotUnitBrick(B)
+}
+
+#[derive(Clone, Debug)]
 pub struct PlacedBrick<B> {
     l: u16,
     w: u16,
@@ -90,6 +95,7 @@ impl<C: Color> PlacedColor<C> {
     }
 }
 
+#[derive(Debug)]
 pub struct Mosaic<B, C> {
     chunks: Vec<Chunk<B, C>>
 }
@@ -98,7 +104,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     pub fn from_image(image: &DynamicImage,
                       palette: &[C],
                       mut height_fn: impl FnMut(u16, u16, C) -> u16,
-                      mut brick_fn: impl FnMut(u16, u16, u16, C) -> B) -> Self {
+                      mut brick_fn: impl FnMut(u16, u16, u16, C) -> B) -> Result<Self, Error<B>> {
 
         // Cache colors, heights, and bricks so functions are only called once per point
         let raw_colors: Pixels<RawColor> = image.into();
@@ -123,27 +129,30 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             |l, w| height_map.value(l as usize, w as usize),
             |l, w, h, color| *brick_cache.entry((l, w, h)).or_insert_with(|| brick_fn(l, w, h, color)),
             |l, w| colors.value(l as usize, w as usize)
-        );
+        )?;
 
-        Mosaic::new(chunks)
+        Ok(Mosaic::new(chunks))
     }
 
-    pub fn reduce_bricks(self, bricks: &[B]) -> Self {
+    pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
         let bricks_by_height: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
-            .fold(HashMap::new(), |mut partitions, &brick| {
+            .fold(Ok(HashMap::new()), |mut partitions_result, &brick| {
+                if let Ok(ref mut partitions) = partitions_result {
 
-                // Consider each brick's associated unit brick as its type
-                let unit_brick = assert_unit_brick(brick.unit_brick());
-                let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
-                entry.push(brick);
+                    // Consider each brick's associated unit brick as its type
+                    let unit_brick = assert_unit_brick(brick.unit_brick())?;
+                    let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
+                    entry.push(brick);
 
-                // A square brick rotated 90 degrees is redundant
-                if brick.length() != brick.width() {
-                    entry.push(brick.rotate_90());
+                    // A square brick rotated 90 degrees is redundant
+                    if brick.length() != brick.width() {
+                        entry.push(brick.rotate_90());
+                    }
+
                 }
 
-                partitions
-            })
+                partitions_result
+            })?
             .into_iter()
             .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_height(bricks)))
             .collect();
@@ -155,7 +164,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             })
             .collect();
 
-        Mosaic::new(chunks)
+        Ok(Mosaic::new(chunks))
     }
 
     fn new(chunks: Vec<Chunk<B, C>>) -> Self {
@@ -194,7 +203,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     max_height: u16,
                     mut height_fn: impl FnMut(u16, u16) -> u16,
                     mut brick_fn: impl FnMut(u16, u16, u16, C) -> B,
-                    color_fn: impl Fn(u16, u16) -> C) -> Vec<Chunk<B, C>> {
+                    color_fn: impl Fn(u16, u16) -> C) -> Result<Vec<Chunk<B, C>>, Error<B>> {
         let mut visited = BoolVec::filled_with(length as usize * width as usize * max_height as usize, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
@@ -211,7 +220,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     }
 
                     let start_color = color_fn(start_l, start_w);
-                    let start_brick = assert_unit_brick(brick_fn(start_l, start_w, start_h, start_color));
+                    let start_brick = assert_unit_brick(brick_fn(start_l, start_w, start_h, start_color))?;
                     coords_to_visit.push_back((start_l, start_w, start_h));
 
                     let mut coords_in_chunk = BTreeMap::new();
@@ -289,7 +298,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             }
         }
 
-        chunks
+        Ok(chunks)
     }
 
     fn slice_chunk(coords_in_chunk: BTreeMap<u16, BTreeSet<(u16, u16)>>,
@@ -367,16 +376,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 }
 
-pub struct TexturedMosaic<B, C> {
-    mosaic: Mosaic<B, C>
-}
-
-impl<B: Brick, C: Color> TexturedMosaic<B, C> {
-    pub fn reduce_bricks(self, bricks: &[B]) -> Self {
-        TexturedMosaic { mosaic: self.mosaic.reduce_bricks(bricks) }
-    }
-}
-
 // ====================
 // PRIVATE TYPE ALIASES
 // ====================
@@ -410,12 +409,11 @@ fn is_new_pos<B: Brick, C: Color>(visited: &BoolVec,
     !was_visited(visited, l, w, h, length, width) && brick_fn(l, w, h, start_color) == start_brick && color_fn(l, w) == start_color
 }
 
-fn assert_unit_brick<B: Brick>(brick: B) -> B {
-    assert_eq!(1, brick.length());
-    assert_eq!(1, brick.width());
-    assert_eq!(1, brick.height());
-
-    brick
+fn assert_unit_brick<B: Brick>(brick: B) -> Result<B, Error<B>> {
+    match brick.length() == 1 && brick.width() == 1 && brick.height() == 1 {
+        true => Ok(brick),
+        false => Err(Error::NotUnitBrick(brick))
+    }
 }
 
 // ====================
@@ -471,6 +469,7 @@ struct LayerPlacedBrick<B> {
     brick: B
 }
 
+#[derive(Debug)]
 struct Chunk<B, C> {
     unit_brick: B,
     color: C,
@@ -704,7 +703,7 @@ mod tests {
     use image::DynamicImage::ImageRgba8;
     use super::*;
 
-    #[derive(Clone, Copy, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct TestBrick<'a> {
         id: &'a str,
         rotation_count: u8,
@@ -768,6 +767,33 @@ mod tests {
         length: 1,
         width: 1,
         height: 1,
+        unit_brick: None,
+    };
+
+    const LENGTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
+        id: "2x1x1",
+        rotation_count: 0,
+        length: 2,
+        width: 1,
+        height: 1,
+        unit_brick: None,
+    };
+
+    const WIDTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
+        id: "1x2x1",
+        rotation_count: 0,
+        length: 1,
+        width: 2,
+        height: 1,
+        unit_brick: None,
+    };
+
+    const HEIGHT_TWO_UNIT_BRICK: TestBrick = TestBrick {
+        id: "2x1x1",
+        rotation_count: 0,
+        length: 1,
+        width: 1,
+        height: 2,
         unit_brick: None,
     };
 
@@ -875,7 +901,7 @@ mod tests {
             &palette[..],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         assert_eq!(0, mosaic.chunks.len());
     }
@@ -889,7 +915,7 @@ mod tests {
             &palette[..],
             |_, _, _| 0,
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         assert_eq!(0, mosaic.chunks.len());
     }
@@ -903,7 +929,7 @@ mod tests {
             &palette[..],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         assert_eq!(5, mosaic.chunks.len());
         let mut total_bricks = 0;
@@ -913,7 +939,7 @@ mod tests {
             total_bricks += chunk.bricks.len();
 
             chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick);
+                assert_unit_brick(brick.brick).unwrap();
                 assert_eq!(0, brick.h);
             });
         }
@@ -929,7 +955,7 @@ mod tests {
             &palette[..],
             |_, _, _| 2,
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         assert_eq!(5, mosaic.chunks.len());
         let mut total_bricks = 0;
@@ -939,7 +965,7 @@ mod tests {
             total_bricks += chunk.bricks.len();
 
             chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick);
+                assert_unit_brick(brick.brick).unwrap();
                 assert!(brick.h == 0 || brick.h == 1);
             });
         }
@@ -966,7 +992,7 @@ mod tests {
             &palette[..],
             |l, w, _| heights[w as usize][l as usize],
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         let mut total_bricks = 0;
         for chunk in mosaic.chunks {
@@ -1006,7 +1032,7 @@ mod tests {
                 true => UNIT_BRICK_2,
                 false => UNIT_BRICK
             }
-        );
+        ).unwrap();
 
         let mut total_bricks_even = 0;
         let mut total_bricks_odd = 0;
@@ -1032,7 +1058,7 @@ mod tests {
             &[],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
-        );
+        ).unwrap();
 
         assert_eq!(1, mosaic.chunks.len());
         let mut total_bricks = 0;
@@ -1042,10 +1068,55 @@ mod tests {
             assert_eq!(TestColor::new(0, 0, 0, 0), chunk.color);
 
             chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick);
+                assert_unit_brick(brick.brick).unwrap();
                 assert_eq!(0, brick.h);
             });
         }
         assert_eq!(4 * 5, total_bricks);
+    }
+
+    #[test]
+    fn test_unit_brick_bad_length() {
+        let (img, palette) = make_test_img();
+
+        assert_eq!(
+            Error::NotUnitBrick(LENGTH_TWO_UNIT_BRICK),
+            Mosaic::from_image(
+                &ImageRgba8(img.clone()),
+                &palette[..],
+                |_, _, _| 1,
+                |_, _, _, _| LENGTH_TWO_UNIT_BRICK
+            ).expect_err("should fail with bad length two unit brick error")
+        );
+    }
+
+    #[test]
+    fn test_unit_brick_bad_width() {
+        let (img, palette) = make_test_img();
+
+        assert_eq!(
+            Error::NotUnitBrick(WIDTH_TWO_UNIT_BRICK),
+            Mosaic::from_image(
+                &ImageRgba8(img.clone()),
+                &palette[..],
+                |_, _, _| 1,
+                |_, _, _, _| WIDTH_TWO_UNIT_BRICK
+            ).expect_err("should fail with bad width two unit brick error")
+        );
+    }
+
+    #[test]
+    fn test_unit_brick_bad_height() {
+        let (img, palette) = make_test_img();
+
+        assert_eq!(
+            Error::NotUnitBrick(HEIGHT_TWO_UNIT_BRICK),
+            Mosaic::from_image(
+                &ImageRgba8(img.clone()),
+                &palette[..],
+                |_, _, _| 1,
+                |_, _, _, _| HEIGHT_TWO_UNIT_BRICK
+            ).expect_err("should fail with bad height two unit brick error")
+        );
     }
 }
