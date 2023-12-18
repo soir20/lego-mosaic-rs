@@ -4,7 +4,6 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
 use boolvec::BoolVec;
-use image::{DynamicImage, GenericImageView, Pixel, SubImage};
 use palette::Srgba;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
@@ -27,6 +26,12 @@ use palette::Srgba;
 // another program.
 
 // ====================
+// PUBLIC TYPE ALIASES
+// ====================
+
+pub type RawColor = Srgba<u8>;
+
+// ====================
 // PUBLIC TRAITS
 // ====================
 
@@ -44,6 +49,18 @@ pub trait Brick: Copy + Hash + Eq {
     fn rotate_90(&self) -> Self;
 }
 
+pub trait Image {
+    type SubImage: Image;
+
+    fn pixel(&self, l: u32, w: u32) -> RawColor;
+
+    fn length(&self) -> u32;
+
+    fn width(&self) -> u32;
+
+    fn view(&self, l: u32, w: u32, length: u32, width: u32) -> Self::SubImage;
+}
+
 // ====================
 // PUBLIC STRUCTS
 // ====================
@@ -59,11 +76,11 @@ pub struct Mosaic<B, C> {
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
-    pub fn from_image(image: &DynamicImage,
-                      palette: &[C],
-                      mut height_fn: impl FnMut(u32, u32, C) -> u32,
-                      mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
-        let section_images = Mosaic::<B, C>::make_sections(image);
+    pub fn from_image<I: Image>(image: &I,
+                                palette: &[C],
+                                mut height_fn: impl FnMut(u32, u32, C) -> u32,
+                                mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
+        let section_images = Mosaic::<B, C>::make_sections::<I>(image);
         let mut sections = Vec::with_capacity(section_images.len());
 
         /* Dividing the mosaic into sections allows u8s to be used for brick coordinates,
@@ -166,21 +183,21 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         }
     }
 
-    fn make_sections(image: &DynamicImage) -> Vec<(u32, u32, u8, u8, SubImage<&DynamicImage>)> {
+    fn make_sections<I: Image>(image: &I) -> Vec<(u32, u32, u8, u8, impl Image)> {
         let section_size = u8::MAX as u32;
         let mut section_l = 0;
 
+        let image_length = image.length();
         let image_width = image.width();
-        let image_height = image.height();
 
         let mut sections = Vec::new();
 
-        while section_l < image.width() {
-            let section_length = section_size.min(image_width - section_l);
+        while section_l < image_length {
+            let section_length = section_size.min(image_length - section_l);
 
             let mut section_w = 0;
-            while section_w < image.height() {
-                let section_width = section_size.min(image_height - section_w);
+            while section_w < image_width {
+                let section_width = section_size.min(image_width - section_w);
                 let section_image = image.view(section_l, section_w, section_length, section_width);
                 sections.push((section_l, section_w, section_length as u8, section_width as u8, section_image));
 
@@ -397,8 +414,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 // ====================
 // PRIVATE TYPE ALIASES
 // ====================
-
-type RawColor = Srgba<u8>;
 
 type HeightMap = Pixels<u32>;
 
@@ -658,22 +673,15 @@ impl<T: Ord> Pixels<T> {
     }
 }
 
-impl From<SubImage<&DynamicImage>> for Pixels<RawColor> {
-    fn from(image: SubImage<&DynamicImage>) -> Self {
-        let length = image.width() as usize;
-        let width = image.height() as usize;
+impl<I: Image> From<I> for Pixels<RawColor> {
+    fn from(image: I) -> Self {
+        let length = image.length() as usize;
+        let width = image.width() as usize;
         let mut colors = Vec::with_capacity(length * width);
 
         for w in 0..width {
             for l in 0..length {
-                let color = image.get_pixel(l as u32, w as u32).to_rgba();
-                let channels = color.channels();
-                let red = channels[0];
-                let green = channels[1];
-                let blue = channels[2];
-                let alpha = channels[3];
-
-                colors.push(Srgba::new(red, green, blue, alpha));
+                colors.push(image.pixel(l as u32, w as u32));
             }
         }
 
@@ -725,8 +733,6 @@ impl Pixels<RawColor> {
 #[cfg(test)]
 mod tests {
     use std::hash::Hasher;
-    use image::{Rgba, RgbaImage};
-    use image::DynamicImage::ImageRgba8;
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -863,30 +869,84 @@ mod tests {
 
     impl Color for TestColor {}
 
-    fn color_to_srgba(color: &Rgba<u8>) -> TestColor {
-        TestColor::new(color.0[0], color.0[1], color.0[2], color.0[3])
+    struct TestImage {
+        colors: Pixels<RawColor>,
+        length: u32,
+        width: u32
     }
 
-    fn vec_to_srgba(colors: Vec<Rgba<u8>>) -> Vec<TestColor> {
-        colors.into_iter()
-            .map(|color| TestColor::new(color.0[0], color.0[1], color.0[2], color.0[3]))
-            .collect()
+    impl<T> Pixels<T> {
+        fn value_mut(&mut self, l: usize, w: usize) -> &mut T {
+            &mut self.values_by_row[w * self.length + l]
+        }
     }
 
-    fn assert_colors_match_img(img: &RgbaImage, chunk: &Chunk<TestBrick, TestColor>) {
-        for l in 0..chunk.length {
-            for &w in &chunk.ws_included[l as usize] {
-                assert_eq!(color_to_srgba(&img.get_pixel((l + chunk.l) as u32, (w + chunk.w) as u32)), chunk.color);
+    impl TestImage {
+        fn new(length: u32, width: u32) -> Self {
+            TestImage {
+                colors: Pixels {
+                    values_by_row: vec![RawColor::new(0, 0, 0, 0); length as usize * width as usize],
+                    length: length as usize
+                },
+                length,
+                width
+            }
+        }
+
+        fn put_pixel(&mut self, l: u32, w: u32, new_pixel: RawColor) {
+            *self.colors.value_mut(l as usize, w as usize) = new_pixel
+        }
+    }
+
+    impl Image for TestImage {
+        type SubImage = TestImage;
+
+        fn pixel(&self, l: u32, w: u32) -> RawColor {
+            self.colors.value(l as usize, w as usize)
+        }
+
+        fn length(&self) -> u32 {
+            self.length
+        }
+
+        fn width(&self) -> u32 {
+            self.width
+        }
+
+        fn view(&self, l: u32, w: u32, length: u32, width: u32) -> Self::SubImage {
+            let mut new_colors = Pixels {
+                values_by_row: vec![RawColor::new(0, 0, 0, 0); length as usize * width as usize],
+                length: length as usize,
+            };
+
+            for sub_l in 0..length {
+                for sub_w in 0..width {
+                    *new_colors.value_mut(sub_l as usize, sub_w as usize) = self.pixel(l + sub_l, w + sub_w);
+                }
+            }
+
+            TestImage {
+                colors: new_colors,
+                length,
+                width,
             }
         }
     }
 
-    fn make_test_img() -> (RgbaImage, Vec<TestColor>) {
-        let color1 = Rgba([235, 64, 52, 255]);
-        let color2 = Rgba([235, 232, 52, 255]);
-        let color3 = Rgba([52, 235, 55, 255]);
-        let color4 = Rgba([52, 147, 235, 255]);
-        let mut img = RgbaImage::new(4, 5);
+    fn assert_colors_match_img(img: &TestImage, chunk: &Chunk<TestBrick, TestColor>) {
+        for l in 0..chunk.length {
+            for &w in &chunk.ws_included[l as usize] {
+                assert_eq!(img.pixel((l + chunk.l) as u32, (w + chunk.w) as u32), chunk.color.value);
+            }
+        }
+    }
+
+    fn make_test_img() -> (TestImage, Vec<TestColor>) {
+        let color1 = RawColor::new(235, 64, 52, 255);
+        let color2 = RawColor::new(235, 232, 52, 255);
+        let color3 = RawColor::new(52, 235, 55, 255);
+        let color4 = RawColor::new(52, 147, 235, 255);
+        let mut img = TestImage::new(4, 5);
 
         img.put_pixel(0, 0, color1);
         img.put_pixel(1, 0, color1);
@@ -913,7 +973,9 @@ mod tests {
         img.put_pixel(2, 4, color3);
         img.put_pixel(3, 4, color3);
 
-        let palette = vec_to_srgba(vec![color1, color2, color3, color4]);
+        let palette = vec![color1, color2, color3, color4].into_iter()
+            .map(|color| TestColor { value: color })
+            .collect();
 
         (img, palette)
     }
@@ -923,7 +985,7 @@ mod tests {
         let (_, palette) = make_test_img();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(RgbaImage::new(0, 0)),
+            &TestImage::new(0, 0),
             &palette[..],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
@@ -937,7 +999,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &palette[..],
             |_, _, _| 0,
             |_, _, _, _| UNIT_BRICK
@@ -951,7 +1013,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &palette[..],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
@@ -982,7 +1044,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &palette[..],
             |_, _, _| 2,
             |_, _, _, _| UNIT_BRICK
@@ -1024,7 +1086,7 @@ mod tests {
             .sum();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &palette[..],
             |l, w, _| heights[w as usize][l as usize],
             |_, _, _, _| UNIT_BRICK
@@ -1065,7 +1127,7 @@ mod tests {
             .sum();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &palette[..],
             |l, w, _| heights[w as usize][l as usize],
             |_, w, _, _| match w % 2 == 0 {
@@ -1099,7 +1161,7 @@ mod tests {
         let (img, _) = make_test_img();
 
         let mosaic = Mosaic::from_image(
-            &ImageRgba8(img.clone()),
+            &img,
             &[],
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
@@ -1133,7 +1195,7 @@ mod tests {
         assert_eq!(
             Error::NotUnitBrick(LENGTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
-                &ImageRgba8(img.clone()),
+                &img,
                 &palette[..],
                 |_, _, _| 1,
                 |_, _, _, _| LENGTH_TWO_UNIT_BRICK
@@ -1148,7 +1210,7 @@ mod tests {
         assert_eq!(
             Error::NotUnitBrick(WIDTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
-                &ImageRgba8(img.clone()),
+                &img,
                 &palette[..],
                 |_, _, _| 1,
                 |_, _, _, _| WIDTH_TWO_UNIT_BRICK
@@ -1163,7 +1225,7 @@ mod tests {
         assert_eq!(
             Error::NotUnitBrick(HEIGHT_TWO_UNIT_BRICK),
             Mosaic::from_image(
-                &ImageRgba8(img.clone()),
+                &img,
                 &palette[..],
                 |_, _, _| 1,
                 |_, _, _, _| HEIGHT_TWO_UNIT_BRICK
