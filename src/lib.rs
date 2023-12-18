@@ -67,7 +67,8 @@ pub trait Image {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error<B> {
-    NotUnitBrick(B)
+    NotUnitBrick(B),
+    PointerTooSmall
 }
 
 #[derive(Debug)]
@@ -216,6 +217,10 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     mut height_fn: impl FnMut(u8, u8) -> u8,
                     mut brick_fn: impl FnMut(u8, u8, u8, C) -> B,
                     color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<B, C>>, Error<B>> {
+        if usize::MAX / length as usize / width as usize / max_height as usize == 0 {
+            return Err(Error::PointerTooSmall);
+        }
+
         let mut visited = BoolVec::filled_with(length as usize * width as usize * max_height as usize, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
