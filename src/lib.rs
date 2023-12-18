@@ -72,7 +72,7 @@ pub enum Error<B> {
 
 #[derive(Debug)]
 pub struct Mosaic<B, C> {
-    sections: Vec<(u32, u32, u32, Vec<Chunk<B, C>>)>
+    sections: Vec<Section<B, C>>
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
@@ -175,7 +175,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         Ok(Mosaic::new(chunks))
     }
 
-    fn new(sections: Vec<(u32, u32, u32, Vec<Chunk<B, C>>)>) -> Self {
+    fn new(sections: Vec<Section<B, C>>) -> Self {
         Mosaic {
             sections: sections.into_iter()
                 .filter(|(_, _, _, chunks)| chunks.iter().all(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0))
@@ -415,6 +415,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 // PRIVATE TYPE ALIASES
 // ====================
 
+type Section<B, C> = (u32, u32, u32, Vec<Chunk<B, C>>);
 type HeightMap = Pixels<u32>;
 
 // ====================
