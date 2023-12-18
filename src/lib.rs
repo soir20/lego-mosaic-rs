@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
 use boolvec::BoolVec;
-use image::{DynamicImage, GenericImageView, Pixel};
+use image::{DynamicImage, GenericImageView, Pixel, SubImage};
 use palette::Srgba;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
@@ -53,69 +53,53 @@ pub enum Error<B> {
     NotUnitBrick(B)
 }
 
-#[derive(Clone, Debug)]
-pub struct PlacedBrick<B> {
-    l: u16,
-    w: u16,
-    h: u16,
-    brick: B
-}
-
-impl<B> PlacedBrick<B> {
-    pub fn l(&self) -> u16 {
-        self.l
-    }
-
-    pub fn w(&self) -> u16 {
-        self.w
-    }
-
-    pub fn h(&self) -> u16 {
-        self.h
-    }
-}
-
 #[derive(Debug)]
 pub struct Mosaic<B, C> {
-    chunks: Vec<Chunk<B, C>>
+    sections: Vec<(u32, u32, Vec<Chunk<B, C>>)>
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
     pub fn from_image(image: &DynamicImage,
                       palette: &[C],
-                      mut height_fn: impl FnMut(u16, u16, C) -> u16,
-                      mut brick_fn: impl FnMut(u16, u16, u16, C) -> B) -> Result<Self, Error<B>> {
+                      mut height_fn: impl FnMut(u32, u32, C) -> u32,
+                      mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
+        let section_images = Mosaic::<B, C>::make_sections(image);
+        let mut sections = Vec::with_capacity(section_images.len());
 
-        // Cache colors, heights, and bricks so functions are only called once per point
-        let raw_colors: Pixels<RawColor> = image.into();
-        let colors = raw_colors.with_palette(palette);
-        let length = colors.length;
-        let width = colors.values_by_row.len() / colors.length.max(1);
+        for (section_l, section_w, section_length, section_width, section_image) in section_images {
 
-        let height_map = HeightMap::from_fn(
-            |l, w| height_fn(l as u16, w as u16, colors.value(l, w)),
-            length,
-            width
-        );
-        let max_height = height_map.max().map_or(0, |max| *max);
+            // Cache colors, heights, and bricks so functions are only called once per point
+            let raw_colors: Pixels<RawColor> = section_image.into();
+            let colors = raw_colors.with_palette(palette);
 
-        let mut brick_cache = BTreeMap::new();
+            let height_map = HeightMap::from_fn(
+                |l, w| height_fn(l as u32 + section_l, w as u32 + section_w, colors.value(l, w)),
+                section_length as usize,
+                section_width as usize
+            );
+            let max_height = height_map.max().map_or(0, |max| *max);
 
-        // Build contiguous 3D chunks (with same color and brick) of the mosaic
-        let chunks = Mosaic::<B, C>::build_chunks(
-            length as u16,
-            width as u16,
-            max_height,
-            |l, w| height_map.value(l as usize, w as usize),
-            |l, w, h, color| *brick_cache.entry((l, w, h)).or_insert_with(|| brick_fn(l, w, h, color)),
-            |l, w| colors.value(l as usize, w as usize)
-        )?;
+            let mut brick_cache = BTreeMap::new();
 
-        Ok(Mosaic::new(chunks))
+            // Build contiguous 3D chunks (with same color and brick) of the mosaic
+            let chunks = Mosaic::<B, C>::build_chunks(
+                section_length,
+                section_width,
+                max_height,
+                |l, w| height_map.value(l as usize, w as usize),
+                |l, w, h, color| *brick_cache.entry((l, w, h))
+                    .or_insert_with(|| brick_fn(l as u32 + section_l, w as u32 + section_w, h, color)),
+                |l, w| colors.value(l as usize, w as usize)
+            )?;
+
+            sections.push((section_l, section_w, chunks));
+        }
+
+        Ok(Mosaic::new(sections))
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
-        let bricks_by_height: HashMap<B, BTreeMap<u16, Vec<AreaSortedBrick<B>>>> = bricks.iter()
+        let bricks_by_height: HashMap<B, BTreeMap<u32, Vec<AreaSortedBrick<B>>>> = bricks.iter()
             .fold(Ok(HashMap::new()), |mut partitions_result, &brick| {
                 if let Ok(ref mut partitions) = partitions_result {
 
@@ -137,30 +121,61 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_height(bricks)))
             .collect();
 
-        let chunks = self.chunks.into_iter()
-            .map(|chunk| {
-                let bricks_by_height = &bricks_by_height[&chunk.unit_brick];
-                chunk.reduce_bricks(bricks_by_height)
-            })
+        let chunks = self.sections.into_iter()
+            .map(|(l, w, chunks)| (
+                l,
+                w,
+                chunks.into_iter().map(|chunk| {
+                    let bricks_by_height = &bricks_by_height[&chunk.unit_brick];
+                    chunk.reduce_bricks(bricks_by_height)
+                }).collect()
+            ))
             .collect();
 
         Ok(Mosaic::new(chunks))
     }
 
-    fn new(chunks: Vec<Chunk<B, C>>) -> Self {
+    fn new(sections: Vec<(u32, u32, Vec<Chunk<B, C>>)>) -> Self {
         Mosaic {
-            chunks: chunks.into_iter()
-                .filter(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0)
+            sections: sections.into_iter()
+                .filter(|(_, _, chunks)| chunks.iter().all(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0))
                 .collect()
         }
     }
 
-    fn build_chunks(length: u16,
-                    width: u16,
-                    max_height: u16,
-                    mut height_fn: impl FnMut(u16, u16) -> u16,
-                    mut brick_fn: impl FnMut(u16, u16, u16, C) -> B,
-                    color_fn: impl Fn(u16, u16) -> C) -> Result<Vec<Chunk<B, C>>, Error<B>> {
+    fn make_sections(image: &DynamicImage) -> Vec<(u32, u32, u8, u8, SubImage<&DynamicImage>)> {
+        let section_size = u8::MAX as u32;
+        let mut section_l = 0;
+
+        let image_width = image.width();
+        let image_height = image.height();
+
+        let mut sections = Vec::new();
+
+        while section_l < image.width() {
+            let section_length = section_size.min(image_width - section_l);
+
+            let mut section_w = 0;
+            while section_w < image.height() {
+                let section_width = section_size.min(image_height - section_w);
+                let section_image = image.view(section_l, section_w, section_length, section_width);
+                sections.push((section_l, section_w, section_length as u8, section_width as u8, section_image));
+
+                section_w += section_width;
+            }
+
+            section_l += section_length;
+        }
+
+        sections
+    }
+
+    fn build_chunks(length: u8,
+                    width: u8,
+                    max_height: u32,
+                    mut height_fn: impl FnMut(u8, u8) -> u32,
+                    mut brick_fn: impl FnMut(u8, u8, u32, C) -> B,
+                    color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<B, C>>, Error<B>> {
         let mut visited = BoolVec::filled_with(length as usize * width as usize * max_height as usize, false);
         let mut coords_to_visit = VecDeque::new();
         let mut chunks = Vec::new();
@@ -258,15 +273,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         Ok(chunks)
     }
 
-    fn slice_chunk(coords_in_chunk: BTreeMap<u16, BTreeSet<(u16, u16)>>,
-                   unit_brick: B, color: C, min_l: u16, max_l: u16,
-                   min_w: u16, max_w: u16, min_h: u16) -> Vec<Chunk<B, C>> {
+    fn slice_chunk(coords_in_chunk: BTreeMap<u32, BTreeSet<(u8, u8)>>,
+                   unit_brick: B, color: C, min_l: u8, max_l: u8,
+                   min_w: u8, max_w: u8, min_h: u32) -> Vec<Chunk<B, C>> {
         if coords_in_chunk.is_empty() {
             return Vec::new();
         }
 
         let mut heights = Vec::new();
-        let mut height: u16 = 0;
+        let mut height = 0;
         let mut last_coords = coords_in_chunk.values().next().unwrap();
         let mut iter = coords_in_chunk.iter();
 
@@ -332,7 +347,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         slices
     }
 
-    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u16, Vec<AreaSortedBrick<B>>> {
+    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u32, Vec<AreaSortedBrick<B>>> {
         /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
            a layer of that h size. */
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
@@ -350,7 +365,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     .collect();
                 sizes.sort();
 
-                (height as u16, sizes)
+                (height as u32, sizes)
             })
             .collect()
     }
@@ -362,28 +377,28 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
 type RawColor = Srgba<u8>;
 
-type HeightMap = Pixels<u16>;
+type HeightMap = Pixels<u32>;
 
 // ====================
 // PRIVATE FUNCTIONS
 // ====================
 
-fn visited_index(l: u16, w: u16, h: u16, length: u16, width: u16) -> usize {
+fn visited_index(l: u8, w: u8, h: u32, length: u8, width: u8) -> usize {
     h as usize * length as usize * width as usize + w as usize * length as usize + l as usize
 }
 
-fn was_visited(visited: &BoolVec, l: u16, w: u16, h: u16, length: u16, width: u16) -> bool {
+fn was_visited(visited: &BoolVec, l: u8, w: u8, h: u32, length: u8, width: u8) -> bool {
     visited.get(visited_index(l, w, h, length, width)).unwrap()
 }
 
 fn is_new_pos<B: Brick, C: Color>(visited: &BoolVec,
-                                  mut brick_fn: impl FnMut(u16, u16, u16, C) -> B,
-                                  color_fn: impl Fn(u16, u16) -> C,
-                                  l: u16,
-                                  w: u16,
-                                  h: u16,
-                                  length: u16,
-                                  width: u16,
+                                  mut brick_fn: impl FnMut(u8, u8, u32, C) -> B,
+                                  color_fn: impl Fn(u8, u8) -> C,
+                                  l: u8,
+                                  w: u8,
+                                  h: u32,
+                                  length: u8,
+                                  width: u8,
                                   start_brick: B,
                                   start_color: C) -> bool {
     !was_visited(visited, l, w, h, length, width) && brick_fn(l, w, h, start_color) == start_brick && color_fn(l, w) == start_color
@@ -444,8 +459,16 @@ impl<B: Brick> Ord for AreaSortedBrick<B> {
 }
 
 struct LayerPlacedBrick<B> {
-    l: u16,
-    w: u16,
+    l: u8,
+    w: u8,
+    brick: B
+}
+
+#[derive(Clone, Debug)]
+struct PlacedBrick<B> {
+    l: u8,
+    w: u8,
+    h: u32,
     brick: B
 }
 
@@ -453,19 +476,19 @@ struct LayerPlacedBrick<B> {
 struct Chunk<B, C> {
     unit_brick: B,
     color: C,
-    l: u16,
-    w: u16,
-    h: u16,
-    length: u16,
-    width: u16,
-    height: u16,
-    ws_included: Vec<BTreeSet<u16>>,
+    l: u8,
+    w: u8,
+    h: u32,
+    length: u8,
+    width: u8,
+    height: u32,
+    ws_included: Vec<BTreeSet<u8>>,
     bricks: Vec<PlacedBrick<B>>
 }
 
 impl<B: Brick, C: Color> Chunk<B, C> {
 
-    fn reduce_bricks(self, bricks_by_height: &BTreeMap<u16, Vec<AreaSortedBrick<B>>>) -> Self {
+    fn reduce_bricks(self, bricks_by_height: &BTreeMap<u32, Vec<AreaSortedBrick<B>>>) -> Self {
         let mut last_h_index = 0;
         let mut remaining_height = self.height;
         let mut layers = Vec::new();
@@ -511,7 +534,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         }
     }
 
-    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], length: u16, mut ws_included_by_l: Vec<BTreeSet<u16>>) -> Vec<LayerPlacedBrick<B>> {
+    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], length: u8, mut ws_included_by_l: Vec<BTreeSet<u8>>) -> Vec<LayerPlacedBrick<B>> {
         let mut bricks = Vec::new();
 
         /* For every space in the chunk that is empty, try to fit the largest possible brick in
@@ -545,13 +568,13 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         bricks
     }
 
-    fn fits(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u16>]) -> bool {
-        if u16::MAX - (length as u16) < l || u16::MAX - (width as u16) < w {
+    fn fits(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u8>]) -> bool {
+        if u8::MAX - length < l || u8::MAX - width < w {
             return false;
         }
 
-        let max_l = l + length as u16;
-        let max_w = w + width as u16;
+        let max_l = l + length;
+        let max_w = w + width;
 
         // Brick extends beyond the chunk's length
         if max_l as usize > ws_included_by_l.len() {
@@ -568,10 +591,10 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         true
     }
 
-    fn remove_brick(l: u16, w: u16, length: u8, width: u8, ws_included_by_l: &mut [BTreeSet<u16>]) {
+    fn remove_brick(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &mut [BTreeSet<u8>]) {
         let min_l = l as usize;
         let max_l = l as usize + length as usize;
-        let max_w = w + width as u16;
+        let max_w = w + width;
 
         // Remove all entries corresponding to a point inside the brick
         for ws_included in ws_included_by_l.iter_mut().take(max_l).skip(min_l) {
@@ -612,8 +635,8 @@ impl<T: Ord> Pixels<T> {
     }
 }
 
-impl From<&DynamicImage> for Pixels<RawColor> {
-    fn from(image: &DynamicImage) -> Self {
+impl From<SubImage<&DynamicImage>> for Pixels<RawColor> {
+    fn from(image: SubImage<&DynamicImage>) -> Self {
         let length = image.width() as usize;
         let width = image.height() as usize;
         let mut colors = Vec::with_capacity(length * width);
@@ -883,7 +906,7 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        assert_eq!(0, mosaic.chunks.len());
+        assert_eq!(0, mosaic.sections.len());
     }
 
     #[test]
@@ -897,7 +920,8 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        assert_eq!(0, mosaic.chunks.len());
+        assert_eq!(1, mosaic.sections.len());
+        assert_eq!(0, mosaic.sections[0].2.len());
     }
 
     #[test]
@@ -911,17 +935,21 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        assert_eq!(5, mosaic.chunks.len());
-        let mut total_bricks = 0;
-        for chunk in mosaic.chunks {
-            assert_eq!(1, chunk.height);
-            assert_colors_match_img(&img, &chunk);
-            total_bricks += chunk.bricks.len();
+        assert_eq!(1, mosaic.sections.len());
+        let mut total_bricks = 0;for (l, w, chunks) in mosaic.sections {
+            assert_eq!(0, l);
+            assert_eq!(0, w);
+            assert_eq!(5, chunks.len());
+            for chunk in chunks {
+                assert_eq!(1, chunk.height);
+                assert_colors_match_img(&img, &chunk);
+                total_bricks += chunk.bricks.len();
 
-            chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick).unwrap();
-                assert_eq!(0, brick.h);
-            });
+                chunk.bricks.iter().for_each(|brick| {
+                    assert_unit_brick(brick.brick).unwrap();
+                    assert_eq!(0, brick.h);
+                });
+            }
         }
         assert_eq!(4 * 5, total_bricks);
     }
@@ -937,17 +965,21 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        assert_eq!(5, mosaic.chunks.len());
-        let mut total_bricks = 0;
-        for chunk in mosaic.chunks {
-            assert_eq!(2, chunk.height);
-            assert_colors_match_img(&img, &chunk);
-            total_bricks += chunk.bricks.len();
+        assert_eq!(1, mosaic.sections.len());
+        let mut total_bricks = 0;for (l, w, chunks) in mosaic.sections {
+            assert_eq!(0, l);
+            assert_eq!(0, w);
+            assert_eq!(5, chunks.len());
+            for chunk in chunks {
+                assert_eq!(2, chunk.height);
+                assert_colors_match_img(&img, &chunk);
+                total_bricks += chunk.bricks.len();
 
-            chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick).unwrap();
-                assert!(brick.h == 0 || brick.h == 1);
-            });
+                chunk.bricks.iter().for_each(|brick| {
+                    assert_unit_brick(brick.brick).unwrap();
+                    assert!(brick.h == 0 || brick.h == 1);
+                });
+            }
         }
         assert_eq!(4 * 5 * 2, total_bricks);
     }
@@ -963,8 +995,8 @@ mod tests {
             [4, 3, 1, 2],
             [3, 1, 1, 4]
         ];
-        let expected_total_bricks: u16 = heights.iter()
-            .map(|row| row.iter().sum::<u16>())
+        let expected_total_bricks: u32 = heights.iter()
+            .map(|row| row.iter().sum::<u32>())
             .sum();
 
         let mosaic = Mosaic::from_image(
@@ -974,10 +1006,13 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        let mut total_bricks = 0;
-        for chunk in mosaic.chunks {
-            assert_colors_match_img(&img, &chunk);
-            total_bricks += chunk.bricks.len();
+        let mut total_bricks = 0;for (l, w, chunks) in mosaic.sections {
+            assert_eq!(0, l);
+            assert_eq!(0, w);
+            for chunk in chunks {
+                assert_colors_match_img(&img, &chunk);
+                total_bricks += chunk.bricks.len();
+            }
         }
         assert_eq!(expected_total_bricks as usize, total_bricks);
     }
@@ -993,15 +1028,15 @@ mod tests {
             [4, 3, 1, 2],
             [3, 1, 1, 4]
         ];
-        let expected_total_bricks_even: u16 = heights.iter().enumerate()
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
             .filter(|(index, _)| index % 2 == 0)
             .map(|(_, row)| row)
-            .map(|row| row.iter().sum::<u16>())
+            .map(|row| row.iter().sum::<u32>())
             .sum();
-        let expected_total_bricks_odd: u16 = heights.iter().enumerate()
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
             .filter(|(index, _)| index % 2 == 1)
             .map(|(_, row)| row)
-            .map(|row| row.iter().sum::<u16>())
+            .map(|row| row.iter().sum::<u32>())
             .sum();
 
         let mosaic = Mosaic::from_image(
@@ -1016,13 +1051,17 @@ mod tests {
 
         let mut total_bricks_even = 0;
         let mut total_bricks_odd = 0;
-        for chunk in mosaic.chunks {
-            assert_colors_match_img(&img, &chunk);
+        for (l, w, chunks) in mosaic.sections {
+            assert_eq!(0, l);
+            assert_eq!(0, w);
+            for chunk in chunks {
+                assert_colors_match_img(&img, &chunk);
 
-            if chunk.w % 2 == 0 {
-                total_bricks_even += chunk.bricks.len();
-            } else {
-                total_bricks_odd += chunk.bricks.len();
+                if chunk.w % 2 == 0 {
+                    total_bricks_even += chunk.bricks.len();
+                } else {
+                    total_bricks_odd += chunk.bricks.len();
+                }
             }
         }
         assert_eq!(expected_total_bricks_even as usize, total_bricks_even);
@@ -1040,17 +1079,22 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        assert_eq!(1, mosaic.chunks.len());
+        assert_eq!(1, mosaic.sections.len());
         let mut total_bricks = 0;
-        for chunk in mosaic.chunks {
-            assert_eq!(1, chunk.height);
-            total_bricks += chunk.bricks.len();
-            assert_eq!(TestColor::new(0, 0, 0, 0), chunk.color);
+        for (l, w, chunks) in mosaic.sections {
+            assert_eq!(0, l);
+            assert_eq!(0, w);
+            assert_eq!(1, chunks.len());
+            for chunk in chunks {
+                assert_eq!(1, chunk.height);
+                total_bricks += chunk.bricks.len();
+                assert_eq!(TestColor::new(0, 0, 0, 0), chunk.color);
 
-            chunk.bricks.iter().for_each(|brick| {
-                assert_unit_brick(brick.brick).unwrap();
-                assert_eq!(0, brick.h);
-            });
+                chunk.bricks.iter().for_each(|brick| {
+                    assert_unit_brick(brick.brick).unwrap();
+                    assert_eq!(0, brick.h);
+                });
+            }
         }
         assert_eq!(4 * 5, total_bricks);
     }
