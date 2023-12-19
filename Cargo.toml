@@ -9,9 +9,10 @@ edition = "2021"
 palette = "0.7.2"
 boolvec = "0.2.6"
 kd-tree = { version = "0.5.1", optional = true }
-nalgebra-glm = "0.18.0"
+nalgebra-glm = { version = "0.18.0", optional = true }
 typenum = "1.17.0"
 
 [features]
 default = ["kd-tree"]
 kd-tree = ["dep:kd-tree"]
+ldraw = []

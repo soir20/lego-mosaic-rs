@@ -1,3 +1,4 @@
+#[cfg(feature = "ldraw")]
 pub mod ldraw;
 
 #[cfg(feature = "kd-tree")]
