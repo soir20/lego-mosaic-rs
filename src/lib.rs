@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
 use boolvec::BoolVec;
+use kd_tree::{KdPoint, KdTree};
 use palette::Srgba;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
@@ -61,9 +62,31 @@ pub trait Image {
     fn view(&self, l: u32, w: u32, length: u32, width: u32) -> Self::SubImage;
 }
 
+pub trait Palette<C> {
+    fn nearest(&self, color: RawColor) -> Option<C>;
+}
+
 // ====================
 // PUBLIC STRUCTS
 // ====================
+
+pub struct EuclideanDistancePalette<C: Color> {
+    tree: KdTree<ColorKdPoint<C>>
+}
+
+impl<C: Color> EuclideanDistancePalette<C> {
+    pub fn new(palette: &[C]) -> Self {
+        let mapped_palette = palette.into_iter().map(|&color| ColorKdPoint(color)).collect();
+        EuclideanDistancePalette { tree: KdTree::build(mapped_palette) }
+    }
+}
+
+impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
+    fn nearest(&self, color: RawColor) -> Option<C> {
+        let components = <RawColor as Into<[u8; 4]>>::into(color).map(i64::from);
+        self.tree.nearest(&components).map(|result| result.item.0)
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error<B> {
@@ -78,7 +101,7 @@ pub struct Mosaic<B, C> {
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
     pub fn from_image<I: Image>(image: &I,
-                                palette: &[C],
+                                palette: &impl Palette<C>,
                                 mut height_fn: impl FnMut(u32, u32, C) -> u32,
                                 mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
         let section_images = Mosaic::<B, C>::make_sections::<I>(image);
@@ -459,6 +482,19 @@ fn assert_unit_brick<B: Brick>(brick: B) -> Result<B, Error<B>> {
 // PRIVATE STRUCTS
 // ====================
 
+struct ColorKdPoint<C>(C);
+
+impl<C: Color> KdPoint for ColorKdPoint<C> {
+    type Scalar = i64;
+    type Dim = typenum::U4;
+
+    fn at(&self, i: usize) -> Self::Scalar {
+        let raw_color = self.0.into();
+        let components: [u8; 4] = raw_color.into();
+        components[i] as i64
+    }
+}
+
 struct AreaSortedBrick<B> {
     brick: B
 }
@@ -696,43 +732,11 @@ impl<I: Image> From<I> for Pixels<RawColor> {
 }
 
 impl Pixels<RawColor> {
-    fn with_palette<C: Color>(self, palette: &[C]) -> Pixels<C> {
+    fn with_palette<C: Color>(self, palette: &impl Palette<C>) -> Pixels<C> {
         let new_colors = self.values_by_row.into_iter()
-            .map(|color| Self::find_similar_color(color, palette))
+            .map(|color| palette.nearest(color).unwrap_or_default())
             .collect();
         Pixels { values_by_row: new_colors, length: self.length }
-    }
-
-    fn find_similar_color<C: Color>(color: RawColor, palette: &[C]) -> C {
-        let mut best_distance = u32::MAX;
-        let mut best_color = C::default();
-
-        for &palette_color in palette {
-            let distance = Self::distance_squared(color, palette_color.into());
-
-            if distance < best_distance {
-                best_distance = distance;
-                best_color = palette_color;
-            }
-        }
-
-        best_color
-    }
-
-    fn distance_squared(color1: RawColor, color2: RawColor) -> u32 {
-
-        // u8 squared -> u16 needed, u16 x 4 -> u32 needed
-        // Ex: 255^2 * 4 = 260100
-        Self::component_distance_squared(color1.red, color2.red)
-            + Self::component_distance_squared(color1.green, color2.green)
-            + Self::component_distance_squared(color1.blue, color2.blue)
-            + Self::component_distance_squared(color1.alpha, color2.alpha)
-
-    }
-
-    fn component_distance_squared(component1: u8, component2: u8) -> u32 {
-        let distance = component1.abs_diff(component2) as u32;
-        distance * distance
     }
 }
 
@@ -947,7 +951,7 @@ mod tests {
         }
     }
 
-    fn make_test_img() -> (TestImage, Vec<TestColor>) {
+    fn make_test_img() -> (TestImage, impl Palette<TestColor>) {
         let color1 = RawColor::new(235, 64, 52, 255);
         let color2 = RawColor::new(235, 232, 52, 255);
         let color3 = RawColor::new(52, 235, 55, 255);
@@ -979,11 +983,11 @@ mod tests {
         img.put_pixel(2, 4, color3);
         img.put_pixel(3, 4, color3);
 
-        let palette = vec![color1, color2, color3, color4].into_iter()
+        let palette: Vec<TestColor> = vec![color1, color2, color3, color4].into_iter()
             .map(|color| TestColor { value: color })
             .collect();
 
-        (img, palette)
+        (img, EuclideanDistancePalette::new(&palette[..]))
     }
 
     #[test]
@@ -992,7 +996,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &TestImage::new(0, 0),
-            &palette[..],
+            &palette,
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1006,7 +1010,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &palette[..],
+            &palette,
             |_, _, _| 0,
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1020,7 +1024,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &palette[..],
+            &palette,
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1051,7 +1055,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &palette[..],
+            &palette,
             |_, _, _| 2,
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1093,7 +1097,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &palette[..],
+            &palette,
             |l, w, _| heights[w as usize][l as usize],
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1134,7 +1138,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &palette[..],
+            &palette,
             |l, w, _| heights[w as usize][l as usize],
             |_, w, _, _| match w % 2 == 0 {
                 true => UNIT_BRICK_2,
@@ -1168,7 +1172,7 @@ mod tests {
 
         let mosaic = Mosaic::from_image(
             &img,
-            &[],
+            &EuclideanDistancePalette::new(&[]),
             |_, _, _| 1,
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
@@ -1202,7 +1206,7 @@ mod tests {
             Error::NotUnitBrick(LENGTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
-                &palette[..],
+                &palette,
                 |_, _, _| 1,
                 |_, _, _, _| LENGTH_TWO_UNIT_BRICK
             ).expect_err("should fail with bad length two unit brick error")
@@ -1217,7 +1221,7 @@ mod tests {
             Error::NotUnitBrick(WIDTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
-                &palette[..],
+                &palette,
                 |_, _, _| 1,
                 |_, _, _, _| WIDTH_TWO_UNIT_BRICK
             ).expect_err("should fail with bad width two unit brick error")
@@ -1232,7 +1236,7 @@ mod tests {
             Error::NotUnitBrick(HEIGHT_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
-                &palette[..],
+                &palette,
                 |_, _, _| 1,
                 |_, _, _, _| HEIGHT_TWO_UNIT_BRICK
             ).expect_err("should fail with bad height two unit brick error")
