@@ -1,8 +1,8 @@
-#[cfg(feature = "ldraw")]
-pub mod ldraw;
-
 #[cfg(feature = "kd-tree")]
 pub mod kdtree;
+
+#[cfg(feature = "ldraw")]
+pub mod ldraw;
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
