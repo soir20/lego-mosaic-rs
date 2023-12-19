@@ -15,4 +15,4 @@ typenum = "1.17.0"
 [features]
 default = ["kd-tree"]
 kd-tree = ["dep:kd-tree"]
-ldraw = []
+ldraw = ["dep:nalgebra-glm"]
