@@ -1,103 +1,56 @@
 use std::hash::{Hash, Hasher};
-use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
 use crate::{Brick, Color};
 
-pub type TransformMatrix = TMat4<f32>;
-
 #[derive(Clone, Copy)]
 pub struct LdrawBrick<'a> {
-    id: &'a str,
-    rotation_count: u8,
     length: u8,
     width: u8,
     height: u8,
-    transform: TransformMatrix,
-    unit_brick: Option<&'a LdrawBrick<'a>>
+    family: u8,
+    unit_brick: Option<&'a LdrawBrick<'a>>,
+    rotated: bool
 }
 
 impl<'a> LdrawBrick<'a> {
-    pub fn new(id: &'a str, length: u8, width: u8, height: u8, transform: TransformMatrix, unit_brick: &'a Self) -> Self {
+    pub fn new(length: u8, width: u8, height: u8, unit_brick: &'a Self, family: u8) -> Self {
         LdrawBrick {
-            id,
-            rotation_count: 0,
             length,
             width,
             height,
-            transform: assert_homogeneous_matrix(transform),
-            unit_brick: Some(unit_brick)
+            family,
+            unit_brick: Some(unit_brick),
+            rotated: false
         }
     }
 
-    pub fn new_unit(id: &'a str, transform: TransformMatrix) -> Self {
+    pub fn new_unit(family: u8) -> Self {
         LdrawBrick {
-            id,
-            rotation_count: 0,
             length: 1,
             width: 1,
             height: 1,
-            transform: assert_homogeneous_matrix(transform),
-            unit_brick: None
+            family,
+            unit_brick: None,
+            rotated: false
         }
     }
 
-    pub fn id(&self) -> &'a str {
-        self.id
+    pub fn family(&self) -> u8 {
+        self.family
     }
 
-    pub fn a(&self) -> f32 {
-        self.transform.m11
-    }
-
-    pub fn b(&self) -> f32 {
-        self.transform.m21
-    }
-
-    pub fn c(&self) -> f32 {
-        self.transform.m31
-    }
-
-    pub fn d(&self) -> f32 {
-        self.transform.m12
-    }
-
-    pub fn e(&self) -> f32 {
-        self.transform.m22
-    }
-
-    pub fn f(&self) -> f32 {
-        self.transform.m32
-    }
-
-    pub fn g(&self) -> f32 {
-        self.transform.m13
-    }
-
-    pub fn h(&self) -> f32 {
-        self.transform.m23
-    }
-
-    pub fn i(&self) -> f32 {
-        self.transform.m33
-    }
-
-    pub fn x(&self) -> f32 {
-        self.transform.m41
-    }
-
-    pub fn y(&self) -> f32 {
-        self.transform.m42
-    }
-
-    pub fn z(&self) -> f32 {
-        self.transform.m43
+    pub fn rotated(&self) -> bool {
+        self.rotated
     }
 }
 
 impl Hash for LdrawBrick<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(self.id.as_ref());
-        state.write_u8(self.rotation_count)
+        state.write_u8(self.length);
+        state.write_u8(self.width);
+        state.write_u8(self.height);
+        state.write_u8(self.family);
+        state.write_u8(u8::from(self.rotated));
     }
 }
 
@@ -105,7 +58,11 @@ impl Eq for LdrawBrick<'_> {}
 
 impl PartialEq<Self> for LdrawBrick<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.rotation_count == other.rotation_count
+        self.length == other.length
+            && self.width == other.width
+            && self.height == other.height
+            && self.family == other.family
+            && self.rotated == other.rotated
     }
 }
 
@@ -130,25 +87,15 @@ impl Brick for LdrawBrick<'_> {
     }
 
     fn rotate_90(&self) -> Self {
-        let transform = rotate_y(&self.transform, f32::to_radians(90f32));
         LdrawBrick {
-            id: self.id,
-            rotation_count: (self.rotation_count + 1) % 4,
             length: self.width,
             width: self.length,
             height: self.height,
-            transform,
             unit_brick: self.unit_brick,
+            family: self.family,
+            rotated: !self.rotated
         }
     }
-}
-
-fn assert_homogeneous_matrix(transform: TransformMatrix) -> TransformMatrix {
-    assert_eq!(0f32, transform.m14);
-    assert_eq!(0f32, transform.m24);
-    assert_eq!(0f32, transform.m34);
-    assert_eq!(1f32, transform.m44);
-    transform
 }
 
 #[derive(Copy, Clone, Eq)]
