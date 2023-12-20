@@ -13,7 +13,7 @@ pub struct LdrawBrick<'a> {
 }
 
 impl<'a> LdrawBrick<'a> {
-    pub fn new(length: u8, width: u8, height: u8, unit_brick: &'a Self, family: u8) -> Self {
+    pub fn new(length: u8, width: u8, height: u8, family: u8, unit_brick: &'a Self) -> Self {
         LdrawBrick {
             length,
             width,
