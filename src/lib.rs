@@ -214,7 +214,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         Ok(Mosaic::new(chunks))
     }
 
-    pub fn iter(&self) -> impl Iterator + '_ {
+    pub fn iter(&self) -> impl Iterator<Item=PlacedBrick<B, C>> + '_ {
         self.sections.iter().flat_map(|(l, w, h, chunks)|
             chunks.iter().flat_map(move |chunk|
                 chunk.bricks.iter().map(move |brick| PlacedBrick {

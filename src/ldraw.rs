@@ -1,6 +1,131 @@
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
+use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
-use crate::{Brick, Color};
+use crate::{Brick, Color, Mosaic};
+
+pub struct SubPartCommand<'a> {
+    color: u16,
+    x: f64,
+    y: f64,
+    z: f64,
+    a: f64,
+    b: f64,
+    c: f64,
+    d: f64,
+    e: f64,
+    f: f64,
+    g: f64,
+    h: f64,
+    i: f64,
+    file: &'a str
+}
+
+impl SubPartCommand {
+    pub fn color(&self) -> u16 {
+        self.color
+    }
+
+    pub fn x(&self) -> f64 {
+        self.x
+    }
+
+    pub fn y(&self) -> f64 {
+        self.y
+    }
+
+    pub fn z(&self) -> f64 {
+        self.z
+    }
+
+    pub fn a(&self) -> f64 {
+        self.a
+    }
+
+    pub fn b(&self) -> f64 {
+        self.b
+    }
+
+    pub fn c(&self) -> f64 {
+        self.c
+    }
+
+    pub fn d(&self) -> f64 {
+        self.d
+    }
+
+    pub fn e(&self) -> f64 {
+        self.e
+    }
+
+    pub fn f(&self) -> f64 {
+        self.f
+    }
+
+    pub fn g(&self) -> f64 {
+        self.g
+    }
+
+    pub fn h(&self) -> f64 {
+        self.h
+    }
+
+    pub fn i(&self) -> f64 {
+        self.i
+    }
+}
+
+impl Display for SubPartCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut str = String::from("1 ");
+
+        str.push_str(&*self.color.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.x.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.y.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.z.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.a.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.b.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.c.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.d.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.e.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.f.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.g.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.h.to_string());
+        str.push(' ');
+
+        str.push_str(&*self.i.to_string());
+        str.push(' ');
+
+        str.push_str(self.file);
+
+        str.push_str("\r\n");
+
+        write!(f, "{}", str)
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct LdrawBrick<'a> {
@@ -41,6 +166,54 @@ impl<'a> LdrawBrick<'a> {
 
     pub fn rotated(&self) -> bool {
         self.rotated
+    }
+
+    pub fn command(&self, l: u32, w: u32, h: u32, color: LdrawColor, file: &str) -> SubPartCommand {
+        let base_x = w as f64;
+        let base_y = -(h as f64);
+        let base_z = l as f64;
+
+        let base_transform = TMat4::new(
+            0f64, 0f64, 0f64, 0f64,
+            0f64, 0f64, 0f64, 0f64,
+            0f64, 0f64, 0f64, 0f64,
+            base_x, base_y, base_z, 1f64
+        );
+        let transform = match self.rotated {
+            true => rotate_y(&base_transform, f64::to_radians(90f64)),
+            false => base_transform
+        };
+        let a = transform.m11;
+        let b = transform.m21;
+        let c = transform.m31;
+        let x = transform.m41;
+
+        let d = transform.m12;
+        let e = transform.m22;
+        let f = transform.m32;
+        let y = transform.m42;
+
+        let g = transform.m13;
+        let h = transform.m23;
+        let i = transform.m33;
+        let z = transform.m43;
+
+        SubPartCommand {
+            color: color.id,
+            x,
+            y,
+            z,
+            a,
+            b,
+            c,
+            d,
+            e,
+            f,
+            g,
+            h,
+            i,
+            file
+        }
     }
 }
 
@@ -135,6 +308,24 @@ impl From<LdrawColor> for Srgba<u8> {
 }
 
 impl Color for LdrawColor {}
+
+pub fn write_mosaic(mut buffer: impl Write, mosaic: Mosaic<LdrawBrick, LdrawColor>, id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
+    let mut bytes = 0;
+
+    for placement in mosaic.iter() {
+        let command = placement.brick.command(
+            placement.l,
+            placement.w,
+            placement.h,
+            placement.color,
+            id_fn(placement.brick)
+        );
+
+        bytes += buffer.write(command.to_string().as_bytes())?
+    }
+
+    Ok(bytes)
+}
 
 pub const BLACK: LdrawColor = LdrawColor::new(0, 27, 42, 52, 255);
 pub const BLUE: LdrawColor = LdrawColor::new(1, 30, 90, 168, 255);
