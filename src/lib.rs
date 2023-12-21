@@ -1,6 +1,9 @@
 #[cfg(feature = "distance")]
 pub mod distance;
 
+#[cfg(feature = "image")]
+pub mod image;
+
 #[cfg(feature = "ldraw")]
 pub mod ldraw;
 
