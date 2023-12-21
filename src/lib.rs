@@ -79,6 +79,36 @@ pub enum Error<B> {
     PointerTooSmall
 }
 
+pub struct PlacedBrick<B, C> {
+    l: u32,
+    w: u32,
+    h: u32,
+    brick: B,
+    color: C
+}
+
+impl<B: Copy, C: Copy> PlacedBrick<B, C> {
+    pub fn l(&self) -> u32 {
+        self.l
+    }
+
+    pub fn w(&self) -> u32 {
+        self.w
+    }
+
+    pub fn h(&self) -> u32 {
+        self.h
+    }
+
+    pub fn brick(&self) -> B {
+        self.brick
+    }
+
+    pub fn color(&self) -> C {
+        self.color
+    }
+}
+
 #[derive(Debug)]
 pub struct Mosaic<B, C> {
     sections: Vec<Section<B, C>>
@@ -182,6 +212,20 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .collect();
 
         Ok(Mosaic::new(chunks))
+    }
+
+    pub fn iter(&self) -> impl Iterator + '_ {
+        self.sections.iter().flat_map(|(l, w, h, chunks)|
+            chunks.iter().flat_map(move |chunk|
+                chunk.bricks.iter().map(move |brick| PlacedBrick {
+                    l: l + chunk.l as u32 + brick.l as u32,
+                    w: w + chunk.w as u32 + brick.w as u32,
+                    h: h + chunk.h as u32 + brick.h as u32,
+                    brick: brick.brick,
+                    color: chunk.color
+                })
+            )
+        )
     }
 
     fn new(sections: Vec<Section<B, C>>) -> Self {
@@ -373,7 +417,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 ws_included[rel_l as usize].insert(rel_w);
 
                 for rel_h in 0..height {
-                    bricks.push(PlacedBrick {
+                    bricks.push(SectionPlacedBrick {
                         l: rel_l,
                         w: rel_w,
                         h: rel_h,
@@ -517,7 +561,7 @@ struct LayerPlacedBrick<B> {
 }
 
 #[derive(Clone, Debug)]
-struct PlacedBrick<B> {
+struct SectionPlacedBrick<B> {
     l: u8,
     w: u8,
     h: u8,
@@ -535,7 +579,7 @@ struct Chunk<B, C> {
     width: u8,
     height: u8,
     ws_included: Vec<BTreeSet<u8>>,
-    bricks: Vec<PlacedBrick<B>>
+    bricks: Vec<SectionPlacedBrick<B>>
 }
 
 impl<B: Brick, C: Color> Chunk<B, C> {
@@ -560,11 +604,11 @@ impl<B: Brick, C: Color> Chunk<B, C> {
             }
         }
 
-        let bricks: Vec<PlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
+        let bricks: Vec<SectionPlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
             let sizes = &bricks_by_height[&height];
             Chunk::<B, C>::reduce_single_layer(sizes, self.length, self.ws_included.clone())
                 .into_iter()
-                .map(move |placed_brick| PlacedBrick {
+                .map(move |placed_brick| SectionPlacedBrick {
                     l: self.l + placed_brick.l,
                     w: self.w + placed_brick.w,
                     h: h_index,
@@ -975,6 +1019,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(0, mosaic.sections.len());
+        assert_eq!(0, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -989,6 +1034,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(0, mosaic.sections.len());
+        assert_eq!(0, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -1003,10 +1049,11 @@ mod tests {
         ).unwrap();
 
         assert_eq!(1, mosaic.sections.len());
-        let mut total_bricks = 0;for (l, w, h, chunks) in mosaic.sections {
-            assert_eq!(0, l);
-            assert_eq!(0, w);
-            assert_eq!(0, h);
+        let mut total_bricks = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
             assert_eq!(5, chunks.len());
             for chunk in chunks {
                 assert_eq!(1, chunk.height);
@@ -1020,6 +1067,7 @@ mod tests {
             }
         }
         assert_eq!(4 * 5, total_bricks);
+        assert_eq!(total_bricks, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -1034,10 +1082,10 @@ mod tests {
         ).unwrap();
 
         assert_eq!(1, mosaic.sections.len());
-        let mut total_bricks = 0;for (l, w, h, chunks) in mosaic.sections {
-            assert_eq!(0, l);
-            assert_eq!(0, w);
-            assert_eq!(0, h);
+        let mut total_bricks = 0;for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
             assert_eq!(5, chunks.len());
             for chunk in chunks {
                 assert_eq!(2, chunk.height);
@@ -1051,6 +1099,7 @@ mod tests {
             }
         }
         assert_eq!(4 * 5 * 2, total_bricks);
+        assert_eq!(total_bricks, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -1075,16 +1124,17 @@ mod tests {
             |_, _, _, _| UNIT_BRICK
         ).unwrap();
 
-        let mut total_bricks = 0;for (l, w, h, chunks) in mosaic.sections {
-            assert_eq!(0, l);
-            assert_eq!(0, w);
-            assert_eq!(0, h);
+        let mut total_bricks = 0;for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
             for chunk in chunks {
                 assert_colors_match_img(&img, &chunk);
                 total_bricks += chunk.bricks.len();
             }
         }
         assert_eq!(expected_total_bricks as usize, total_bricks);
+        assert_eq!(total_bricks, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -1121,10 +1171,10 @@ mod tests {
 
         let mut total_bricks_even = 0;
         let mut total_bricks_odd = 0;
-        for (l, w, h, chunks) in mosaic.sections {
-            assert_eq!(0, l);
-            assert_eq!(0, w);
-            assert_eq!(0, h);
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
             for chunk in chunks {
                 assert_colors_match_img(&img, &chunk);
 
@@ -1137,6 +1187,7 @@ mod tests {
         }
         assert_eq!(expected_total_bricks_even as usize, total_bricks_even);
         assert_eq!(expected_total_bricks_odd as usize, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
@@ -1152,10 +1203,10 @@ mod tests {
 
         assert_eq!(1, mosaic.sections.len());
         let mut total_bricks = 0;
-        for (l, w, h, chunks) in mosaic.sections {
-            assert_eq!(0, l);
-            assert_eq!(0, w);
-            assert_eq!(0, h);
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
             assert_eq!(1, chunks.len());
             for chunk in chunks {
                 assert_eq!(1, chunk.height);
@@ -1169,6 +1220,7 @@ mod tests {
             }
         }
         assert_eq!(4 * 5, total_bricks);
+        assert_eq!(total_bricks, mosaic.iter().fold(0, |total, _| total + 1));
     }
 
     #[test]
