@@ -13,12 +13,12 @@ pub struct LdrawBrick<'a> {
 }
 
 impl<'a> LdrawBrick<'a> {
-    pub fn new(length: u8, width: u8, height: u8, family: u8, unit_brick: &'a Self) -> Self {
+    pub fn new(length: u8, width: u8, height: u8, unit_brick: &'a Self) -> Self {
         LdrawBrick {
             length,
             width,
             height,
-            family,
+            family: unit_brick.family,
             unit_brick: Some(unit_brick),
             rotated: false
         }
