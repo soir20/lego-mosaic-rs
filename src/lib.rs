@@ -1,5 +1,5 @@
-#[cfg(feature = "kd-tree")]
-pub mod kdtree;
+#[cfg(feature = "distance")]
+pub mod distance;
 
 #[cfg(feature = "ldraw")]
 pub mod ldraw;
@@ -712,11 +712,10 @@ impl Pixels<RawColor> {
     }
 }
 
-#[cfg(all(test, feature = "kd-tree"))]
-
+#[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::kdtree::EuclideanDistancePalette;
+    use crate::distance::EuclideanDistancePalette;
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
