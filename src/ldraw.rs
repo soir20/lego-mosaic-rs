@@ -170,11 +170,12 @@ impl<'a> LdrawBrick<'a> {
 
     pub fn command(&self, l: u32, w: u32, h: u32, color: LdrawColor, file: &'a str,
                    mosaic: &Mosaic<LdrawBrick, LdrawColor>) -> SubPartCommand {
-        let ldraw_units_per_unit_brick = 20f64;
+        let ldraw_horizontal_scale = 20f64;
+        let ldraw_vertical_scale = 8f64;
 
-        let base_x = l as f64 * ldraw_units_per_unit_brick;
-        let base_y = -(h as f64) * ldraw_units_per_unit_brick;
-        let base_z = mosaic.width() as f64 - w as f64 * ldraw_units_per_unit_brick;
+        let base_x = (l as f64 + self.length as f64 / 2f64) * ldraw_horizontal_scale;
+        let base_y = -(self.height as f64 + h as f64) * ldraw_vertical_scale;
+        let base_z = (mosaic.width() as f64 - w as f64 - self.width as f64 / 2f64) * ldraw_horizontal_scale;
 
         let base_transform = TMat4::new(
             1f64, 0f64, 0f64, 0f64,
