@@ -57,15 +57,11 @@ pub trait Brick: Copy + Hash + Eq {
 }
 
 pub trait Image {
-    type SubImage: Image;
-
     fn pixel(&self, l: u32, w: u32) -> RawColor;
 
     fn length(&self) -> u32;
 
     fn width(&self) -> u32;
-
-    fn view(&self, l: u32, w: u32, length: u32, width: u32) -> Self::SubImage;
 }
 
 pub trait Palette<C> {
@@ -114,7 +110,9 @@ impl<B: Copy, C: Copy> PlacedBrick<B, C> {
 
 #[derive(Debug)]
 pub struct Mosaic<B, C> {
-    sections: Vec<Section<B, C>>
+    sections: Vec<Section<B, C>>,
+    length: u32,
+    width: u32
 }
 
 impl<B: Brick, C: Color> Mosaic<B, C> {
@@ -122,16 +120,21 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                                 palette: &impl Palette<C>,
                                 mut height_fn: impl FnMut(u32, u32, C) -> u32,
                                 mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
-        let section_images = Mosaic::<B, C>::make_sections::<I>(image);
+        let section_size = u8::MAX as u32;
+        let section_images = Mosaic::<B, C>::make_sections::<I>(image, section_size);
         let mut sections = Vec::with_capacity(section_images.len());
 
         /* Dividing the mosaic into sections allows u8s to be used for brick coordinates,
            significantly reducing memory required. It also limits memory to the amount required
            for the section while the mosaic is being generated and improves spatial locality. */
-        for (section_l, section_w, section_length, section_width, section_image) in section_images {
+        for (section_l, section_w, section_length, section_width) in section_images {
 
             // Cache colors, heights, and bricks so functions are only called once per point
-            let raw_colors: Pixels<RawColor> = section_image.into();
+            let raw_colors: Pixels<RawColor> = Pixels::<RawColor>::from_fn(
+                |l, w| image.pixel(l as u32 + section_l, w as u32 + section_w),
+                section_length as usize,
+                section_width as usize
+            );
             let colors = raw_colors.with_palette(palette);
 
             let height_map = HeightMap::from_fn(
@@ -141,7 +144,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             );
             let max_height = height_map.max().map_or(0, |max| *max);
 
-            let section_size = u8::MAX as u32;
             let mut section_h = 0;
 
             while section_h < max_height {
@@ -176,7 +178,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             }
         }
 
-        Ok(Mosaic::new(sections))
+        Ok(Mosaic::new(sections, image.length(), image.width()))
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
@@ -214,7 +216,15 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             ))
             .collect();
 
-        Ok(Mosaic::new(chunks))
+        Ok(Mosaic::new(chunks, self.length, self.width))
+    }
+
+    pub fn length(&self) -> u32 {
+        self.length
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
     }
 
     pub fn iter(&self) -> impl Iterator<Item=PlacedBrick<B, C>> + '_ {
@@ -231,16 +241,17 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         )
     }
 
-    fn new(sections: Vec<Section<B, C>>) -> Self {
+    fn new(sections: Vec<Section<B, C>>, length: u32, width: u32) -> Self {
         Mosaic {
             sections: sections.into_iter()
                 .filter(|(_, _, _, chunks)| chunks.iter().all(|chunk| chunk.length > 0 && chunk.width > 0 && chunk.height > 0))
-                .collect()
+                .collect(),
+            length,
+            width
         }
     }
 
-    fn make_sections<I: Image>(image: &I) -> Vec<(u32, u32, u8, u8, impl Image)> {
-        let section_size = u8::MAX as u32;
+    fn make_sections<I: Image>(image: &I, section_size: u32) -> Vec<(u32, u32, u8, u8)> {
         let mut section_l = 0;
 
         let image_length = image.length();
@@ -254,8 +265,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             let mut section_w = 0;
             while section_w < image_width {
                 let section_width = section_size.min(image_width - section_w);
-                let section_image = image.view(section_l, section_w, section_length, section_width);
-                sections.push((section_l, section_w, section_length as u8, section_width as u8, section_image));
+                sections.push((section_l, section_w, section_length as u8, section_width as u8));
 
                 section_w += section_width;
             }
@@ -734,22 +744,6 @@ impl<T: Ord> Pixels<T> {
     }
 }
 
-impl<I: Image> From<I> for Pixels<RawColor> {
-    fn from(image: I) -> Self {
-        let length = image.length() as usize;
-        let width = image.width() as usize;
-        let mut colors = Vec::with_capacity(length * width);
-
-        for w in 0..width {
-            for l in 0..length {
-                colors.push(image.pixel(l as u32, w as u32));
-            }
-        }
-
-        Pixels { values_by_row: colors, length }
-    }
-}
-
 impl Pixels<RawColor> {
     fn with_palette<C: Color>(self, palette: &impl Palette<C>) -> Pixels<C> {
         let new_colors = self.values_by_row.into_iter()
@@ -759,10 +753,14 @@ impl Pixels<RawColor> {
     }
 }
 
-#[cfg(all(test, feature = "default"))]
+#[cfg(all(test, feature = "default", feature = "image", feature = "ldraw"))]
 mod tests {
+    use std::fs::File;
     use std::hash::Hasher;
+    use ::image::io::Reader;
+    use ::image::imageops::FilterType;
     use crate::distance::EuclideanDistancePalette;
+    use crate::ldraw::{LdrawBrick, LdrawColor, write_mosaic};
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -929,8 +927,6 @@ mod tests {
     }
 
     impl Image for TestImage {
-        type SubImage = TestImage;
-
         fn pixel(&self, l: u32, w: u32) -> RawColor {
             self.colors.value(l as usize, w as usize)
         }
@@ -941,25 +937,6 @@ mod tests {
 
         fn width(&self) -> u32 {
             self.width
-        }
-
-        fn view(&self, l: u32, w: u32, length: u32, width: u32) -> Self::SubImage {
-            let mut new_colors = Pixels {
-                values_by_row: vec![RawColor::new(0, 0, 0, 0); length as usize * width as usize],
-                length: length as usize,
-            };
-
-            for sub_l in 0..length {
-                for sub_w in 0..width {
-                    *new_colors.value_mut(sub_l as usize, sub_w as usize) = self.pixel(l + sub_l, w + sub_w);
-                }
-            }
-
-            TestImage {
-                colors: new_colors,
-                length,
-                width,
-            }
         }
     }
 
@@ -1269,5 +1246,22 @@ mod tests {
                 |_, _, _, _| HEIGHT_TWO_UNIT_BRICK
             ).expect_err("should fail with bad height two unit brick error")
         );
+    }
+
+    #[test]
+    fn test() {
+        let palette: Vec<LdrawColor> = vec![ldraw::DARK_RED, ldraw::RED, ldraw::BLACK, ldraw::YELLOW, ldraw::BRIGHT_LIGHT_ORANGE, ldraw::ORANGE, ldraw::BRIGHT_LIGHT_YELLOW];
+
+        let img = Reader::open("maul2.jpg").unwrap().decode().unwrap().resize(64, 64, FilterType::CatmullRom);
+        println!("Image size: {}x{}", img.width(), img.height());
+        let mosaic = Mosaic::from_image(
+            &img,
+            &EuclideanDistancePalette::new(&palette),
+            |l, w, c| 1,
+            |l, w, h, c| LdrawBrick::new_unit(0)
+        ).unwrap();
+
+        let mut buffer = File::create("result3.ldr").unwrap();
+        write_mosaic(&mut buffer, &mosaic, |b| "parts/6141.dat").unwrap();
     }
 }
