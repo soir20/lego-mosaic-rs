@@ -182,18 +182,18 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
-        let bricks_by_height: HashMap<B, BTreeMap<u8, Vec<AreaSortedBrick<B>>>> = bricks.iter()
+        let bricks_by_type: HashMap<B, Vec<VolumeSortedBrick<B>>> = bricks.iter()
             .fold(Ok(HashMap::new()), |partitions_result, &brick| {
                 if let Ok(mut partitions) = partitions_result {
 
                     // Consider each brick's associated unit brick as its type
                     let unit_brick = assert_unit_brick(brick.unit_brick())?;
                     let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
-                    entry.push(brick);
+                    entry.push(VolumeSortedBrick { brick });
 
                     // A square brick rotated 90 degrees is redundant
                     if brick.length() != brick.width() {
-                        entry.push(brick.rotate_90());
+                        entry.push(VolumeSortedBrick { brick: brick.rotate_90() });
                     }
 
                     Ok(partitions)
@@ -204,11 +204,13 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
             .into_iter()
             .map(|(unit_brick, mut bricks)| {
 
-                /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
-                   a layer of that h size. */
-                bricks.push(unit_brick);
+                // Always add the unit brick so at least some bricks are returned
+                bricks.push(VolumeSortedBrick { brick: unit_brick });
 
-                (unit_brick, Mosaic::<B, C>::partition_by_height(bricks))
+                // Sort bricks by volume so that larger bricks are chosen first
+                bricks.sort();
+
+                (unit_brick, bricks)
             })
             .collect();
 
@@ -218,7 +220,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 w,
                 h,
                 chunks.into_iter().map(|chunk| {
-                    let bricks_by_height = &bricks_by_height[&chunk.unit_brick];
+                    let bricks_by_height = &bricks_by_type[&chunk.unit_brick];
                     chunk.reduce_bricks(bricks_by_height)
                 }).collect()
             ))
@@ -464,27 +466,6 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
         slices
     }
-
-    fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u8, Vec<AreaSortedBrick<B>>> {
-        bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
-            partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
-            partitions
-        })
-            .into_iter()
-            .map(|(height, bricks)| {
-
-                /* Sort bricks by area so that larger bricks are chosen first. We don't need to
-                   sort by volume because the brick-filling algorithm only needs to consider 2D
-                   space. */
-                let mut sizes: Vec<_> = bricks.into_iter()
-                    .map(|brick| AreaSortedBrick { brick })
-                    .collect();
-                sizes.sort();
-
-                (height, sizes)
-            })
-            .collect()
-    }
 }
 
 // ====================
@@ -530,11 +511,11 @@ fn assert_unit_brick<B: Brick>(brick: B) -> Result<B, Error<B>> {
 // PRIVATE STRUCTS
 // ====================
 
-struct AreaSortedBrick<B> {
+struct VolumeSortedBrick<B> {
     brick: B
 }
 
-impl<B: Brick> AreaSortedBrick<B> {
+impl<B: Brick> VolumeSortedBrick<B> {
     fn length(&self) -> u8 {
         self.brick.length()
     }
@@ -543,40 +524,38 @@ impl<B: Brick> AreaSortedBrick<B> {
         self.brick.width()
     }
 
-    fn area(&self) -> u16 {
-        self.length() as u16 * self.width() as u16
+    fn height(&self) -> u8 {
+        self.brick.height()
+    }
+
+    fn volume(&self) -> u32 {
+        self.length() as u32 * self.width() as u32 * self.height() as u32
     }
 }
 
-impl<B: Brick> Eq for AreaSortedBrick<B> {}
+impl<B: Brick> Eq for VolumeSortedBrick<B> {}
 
-impl<B: Brick> PartialEq<Self> for AreaSortedBrick<B> {
+impl<B: Brick> PartialEq<Self> for VolumeSortedBrick<B> {
     fn eq(&self, other: &Self) -> bool {
         self.brick == other.brick
     }
 }
 
-impl<B: Brick> PartialOrd<Self> for AreaSortedBrick<B> {
+impl<B: Brick> PartialOrd<Self> for VolumeSortedBrick<B> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<B: Brick> Ord for AreaSortedBrick<B> {
+impl<B: Brick> Ord for VolumeSortedBrick<B> {
     fn cmp(&self, other: &Self) -> Ordering {
-        let area1 = self.area();
-        let area2 = other.area();
+        let volume1 = self.volume();
+        let volume2 = other.volume();
 
         // Sort in descending order
-        area2.cmp(&area1)
+        volume2.cmp(&volume1)
 
     }
-}
-
-struct LayerPlacedBrick<B> {
-    l: u8,
-    w: u8,
-    brick: B
 }
 
 #[derive(Clone, Debug)]
@@ -603,37 +582,44 @@ struct Chunk<B, C> {
 
 impl<B: Brick, C: Color> Chunk<B, C> {
 
-    fn reduce_bricks(self, bricks_by_height: &BTreeMap<u8, Vec<AreaSortedBrick<B>>>) -> Self {
-        let mut last_h_index = 0;
-        let mut remaining_height = self.height;
-        let mut layers = Vec::new();
+    fn reduce_bricks(self, sizes: &Vec<VolumeSortedBrick<B>>) -> Self {
+        let mut ws_included_by_h: Vec<_> = (0..self.height)
+            .map(|_| self.ws_included.clone())
+            .collect();
+        let mut bricks = Vec::new();
 
-        /* For simplicity, divide the chunk along the h axis into as few layers as possible.
-           Because every entry contains at least one 1x1 brick with the given height, we know we
-           can fill a layer of that height completely. The standard 1x1 brick is 5 plates tall,
-           so most of the time, solutions from a simpler algorithm that only needs to fill 2D
-           space should be fairly close to those from an algorithm that considered 3D space. */
-        for &height in bricks_by_height.keys().rev() {
-            let layers_of_size = remaining_height / height;
-            remaining_height %= height;
+        /* For every space in the chunk that is empty, try to fit the largest possible brick in
+           that space and the spaces surrounding it. If it fits, place the brick at that position
+           to fill those empty spaces. This greedy approach may produce sub-optimal solutions, but
+           its solutions are often optimal or close to optimal. The problem of finding an optimal
+           solution is likely NP-complete, given its similarity to the exact cover problem, and
+           thus no known polynomial-time optimal algorithm exists. */
+        for h in 0..self.height {
+            let h_index = h as usize;
 
-            for _ in 0..layers_of_size {
-                layers.push((height, last_h_index));
-                last_h_index += height;
+            for l in 0..self.length {
+                let l_index = l as usize;
+
+                while !ws_included_by_h[h_index][l_index].is_empty() {
+                    let ws_included = &ws_included_by_h[h_index][l_index];
+
+                    if let Some(&w) = ws_included.first() {
+                        for size in sizes {
+                            if Chunk::<B, C>::fits(l, w, h, size.length(), size.width(), size.height(), &ws_included_by_h) {
+                                Chunk::<B, C>::remove_brick(l, w, h, size.length(), size.width(), size.height(), &mut ws_included_by_h);
+                                bricks.push(ChunkPlacedBrick {
+                                    l,
+                                    w,
+                                    h,
+                                    brick: size.brick
+                                });
+                            }
+                        }
+                    }
+
+                }
             }
         }
-
-        let bricks: Vec<ChunkPlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
-            let sizes = &bricks_by_height[&height];
-            Chunk::<B, C>::reduce_single_layer(sizes, self.length, self.ws_included.clone())
-                .into_iter()
-                .map(move |placed_brick| ChunkPlacedBrick {
-                    l: placed_brick.l,
-                    w: placed_brick.w,
-                    h: h_index,
-                    brick: placed_brick.brick
-                })
-        }).collect();
 
         Chunk {
             unit_brick: self.unit_brick,
@@ -649,45 +635,28 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         }
     }
 
-    fn reduce_single_layer(sizes: &[AreaSortedBrick<B>], length: u8, mut ws_included_by_l: Vec<BTreeSet<u8>>) -> Vec<LayerPlacedBrick<B>> {
-        let mut bricks = Vec::new();
-
-        /* For every space in the chunk that is empty, try to fit the largest possible brick in
-           that space and the spaces surrounding it. If it fits, place the brick at that position
-           to fill those empty spaces. This greedy approach may produce sub-optimal solutions, but
-           its solutions are often optimal or close to optimal. The problem of finding an optimal
-           solution is likely NP-complete, given its similarity to the exact cover problem, and
-           thus no known polynomial-time optimal algorithm exists. */
-        for l in 0..length {
-            let l_index = l as usize;
-
-            while !ws_included_by_l[l_index].is_empty() {
-                let ws_included = &ws_included_by_l[l_index];
-
-                if let Some(&w) = ws_included.first() {
-                    for size in sizes {
-                        if Chunk::<B, C>::fits(l, w, size.length(), size.width(), &ws_included_by_l) {
-                            Chunk::<B, C>::remove_brick(l, w, size.length(), size.width(), &mut ws_included_by_l);
-                            bricks.push(LayerPlacedBrick {
-                                brick: size.brick,
-                                l,
-                                w
-                            })
-                        }
-                    }
-                }
-            }
-        }
-
-
-        bricks
-    }
-
-    fn fits(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u8>]) -> bool {
-        if u8::MAX - length < l || u8::MAX - width < w {
+    fn fits(l: u8, w: u8, h: u8, length: u8, width: u8, height: u8, ws_included_by_h: &[Vec<BTreeSet<u8>>]) -> bool {
+        if u8::MAX - height < h || u8::MAX - length < l || u8::MAX - width < w {
             return false;
         }
 
+        let max_h = h + height;
+
+        // Brick extends beyond the chunk's height
+        if max_h as usize > ws_included_by_h.len() {
+            return false;
+        }
+
+        for test_h in h..max_h {
+            if !Chunk::<B, C>::fits_layer(l, w, length, width, &ws_included_by_h[test_h as usize]) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn fits_layer(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &[BTreeSet<u8>]) -> bool {
         let max_l = l + length;
         let max_w = w + width;
 
@@ -706,13 +675,19 @@ impl<B: Brick, C: Color> Chunk<B, C> {
         true
     }
 
-    fn remove_brick(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &mut [BTreeSet<u8>]) {
+    fn remove_brick(l: u8, w: u8, h: u8, length: u8, width: u8, height: u8, ws_included_by_h: &mut [Vec<BTreeSet<u8>>]) {
+        let max_h = h + height;
+        for h_index in h..max_h {
+            Chunk::<B, C>::remove_brick_layer(l, w, length, width, &mut ws_included_by_h[h_index as usize]);
+        }
+    }
+
+    fn remove_brick_layer(l: u8, w: u8, length: u8, width: u8, ws_included_by_l: &mut [BTreeSet<u8>]) {
         let min_l = l as usize;
-        let max_l = l as usize + length as usize;
         let max_w = w + width;
 
         // Remove all entries corresponding to a point inside the brick
-        for ws_included in ws_included_by_l.iter_mut().take(max_l).skip(min_l) {
+        for ws_included in ws_included_by_l.iter_mut().skip(min_l).take(length as usize) {
             for cur_w in w..max_w {
                 ws_included.remove(&cur_w);
             }
