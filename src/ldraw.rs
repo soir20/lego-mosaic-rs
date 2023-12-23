@@ -2,8 +2,7 @@ use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use nalgebra_glm::{rotate_y, TMat4};
-use palette::Srgba;
-use crate::{Brick, Color, Mosaic};
+use crate::{Brick, Color, Mosaic, Srgba};
 
 const BASE_TRANSFORM: TMat4<f64> = TMat4::new(
     1f64, 0f64, 0f64, 0f64,
@@ -283,7 +282,7 @@ pub struct LdrawColor {
 
 impl LdrawColor {
     pub const fn new(id: u16, red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        LdrawColor { id, value: Srgba::new(red, green, blue, alpha), }
+        LdrawColor { id, value: Srgba::new(red, green, blue, alpha) }
     }
 }
 

@@ -10,8 +10,8 @@ pub mod ldraw;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
+use std::ops::Index;
 use boolvec::BoolVec;
-use palette::Srgba;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
 // respectively. A brick's length refers to its size along the l axis, a brick's
@@ -71,6 +71,45 @@ pub trait Palette<C> {
 // ====================
 // PUBLIC STRUCTS
 // ====================
+
+pub enum RgbaIndex {
+    Red,
+    Green,
+    Blue,
+    Alpha
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Srgba<T> {
+    red: T,
+    green: T,
+    blue: T,
+    alpha: T
+}
+
+impl Srgba<u8> {
+    pub const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Srgba<u8> {
+        Srgba {
+            red,
+            green,
+            blue,
+            alpha
+        }
+    }
+}
+
+impl<T> Index<RgbaIndex> for Srgba<T> {
+    type Output = T;
+
+    fn index(&self, index: RgbaIndex) -> &Self::Output {
+        match index {
+            RgbaIndex::Red => &self.red,
+            RgbaIndex::Green => &self.green,
+            RgbaIndex::Blue => &self.blue,
+            RgbaIndex::Alpha => &self.alpha
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Error<B> {
