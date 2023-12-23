@@ -11,7 +11,7 @@ pub struct EuclideanDistancePalette<C: Color> {
 
 impl<C: Color> EuclideanDistancePalette<C> {
     pub fn new(palette: &[C]) -> Self {
-        let mapped_palette = palette.into_iter().map(|&color| ColorKdPoint(color)).collect();
+        let mapped_palette = palette.iter().map(|&color| ColorKdPoint(color)).collect();
         EuclideanDistancePalette { tree: KdTree::build(mapped_palette) }
     }
 }

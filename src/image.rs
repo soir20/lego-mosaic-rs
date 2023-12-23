@@ -15,10 +15,10 @@ impl<I: GenericImageView<Pixel=Rgba<u8>>> Image for I {
     }
 
     fn length(&self) -> u32 {
-        I::width(&self)
+        I::width(self)
     }
 
     fn width(&self) -> u32 {
-        I::height(&self)
+        I::height(self)
     }
 }

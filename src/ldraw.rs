@@ -87,43 +87,43 @@ impl Display for SubPartCommand<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut str = String::from("1 ");
 
-        str.push_str(&*self.color.to_string());
+        str.push_str(&self.color.to_string());
         str.push(' ');
 
-        str.push_str(&*self.x.to_string());
+        str.push_str(&self.x.to_string());
         str.push(' ');
 
-        str.push_str(&*self.y.to_string());
+        str.push_str(&self.y.to_string());
         str.push(' ');
 
-        str.push_str(&*self.z.to_string());
+        str.push_str(&self.z.to_string());
         str.push(' ');
 
-        str.push_str(&*self.a.to_string());
+        str.push_str(&self.a.to_string());
         str.push(' ');
 
-        str.push_str(&*self.b.to_string());
+        str.push_str(&self.b.to_string());
         str.push(' ');
 
-        str.push_str(&*self.c.to_string());
+        str.push_str(&self.c.to_string());
         str.push(' ');
 
-        str.push_str(&*self.d.to_string());
+        str.push_str(&self.d.to_string());
         str.push(' ');
 
-        str.push_str(&*self.e.to_string());
+        str.push_str(&self.e.to_string());
         str.push(' ');
 
-        str.push_str(&*self.f.to_string());
+        str.push_str(&self.f.to_string());
         str.push(' ');
 
-        str.push_str(&*self.g.to_string());
+        str.push_str(&self.g.to_string());
         str.push(' ');
 
-        str.push_str(&*self.h.to_string());
+        str.push_str(&self.h.to_string());
         str.push(' ');
 
-        str.push_str(&*self.i.to_string());
+        str.push_str(&self.i.to_string());
         str.push(' ');
 
         str.push_str(self.file);
