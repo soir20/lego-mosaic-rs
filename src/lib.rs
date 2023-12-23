@@ -183,8 +183,8 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
 
     pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
         let bricks_by_height: HashMap<B, BTreeMap<u8, Vec<AreaSortedBrick<B>>>> = bricks.iter()
-            .fold(Ok(HashMap::new()), |mut partitions_result, &brick| {
-                if let Ok(ref mut partitions) = partitions_result {
+            .fold(Ok(HashMap::new()), |partitions_result, &brick| {
+                if let Ok(mut partitions) = partitions_result {
 
                     // Consider each brick's associated unit brick as its type
                     let unit_brick = assert_unit_brick(brick.unit_brick())?;
@@ -196,12 +196,20 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                         entry.push(brick.rotate_90());
                     }
 
+                    Ok(partitions)
+                } else {
+                    partitions_result
                 }
-
-                partitions_result
             })?
             .into_iter()
-            .map(|(unit_brick, bricks)| (unit_brick, Mosaic::<B, C>::partition_by_height(bricks)))
+            .map(|(unit_brick, mut bricks)| {
+
+                /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
+                   a layer of that h size. */
+                bricks.push(unit_brick);
+
+                (unit_brick, Mosaic::<B, C>::partition_by_height(bricks))
+            })
             .collect();
 
         let chunks = self.sections.into_iter()
@@ -430,7 +438,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 ws_included[rel_l as usize].insert(rel_w);
 
                 for rel_h in 0..height {
-                    bricks.push(SectionPlacedBrick {
+                    bricks.push(ChunkPlacedBrick {
                         l: rel_l,
                         w: rel_w,
                         h: rel_h,
@@ -458,15 +466,13 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     }
 
     fn partition_by_height(bricks: Vec<B>) -> BTreeMap<u8, Vec<AreaSortedBrick<B>>> {
-        /* Ensure that every h size has at least one 1x1 brick so that we are certain we can fill
-           a layer of that h size. */
         bricks.into_iter().fold(BTreeMap::new(), |mut partitions, brick| {
             partitions.entry(brick.height()).or_insert_with(Vec::new).push(brick);
             partitions
         })
             .into_iter()
-            .filter(|(_, bricks)| bricks.iter().any(|brick| brick.length() == 1 && brick.width() == 1))
             .map(|(height, bricks)| {
+
                 /* Sort bricks by area so that larger bricks are chosen first. We don't need to
                    sort by volume because the brick-filling algorithm only needs to consider 2D
                    space. */
@@ -574,7 +580,7 @@ struct LayerPlacedBrick<B> {
 }
 
 #[derive(Clone, Debug)]
-struct SectionPlacedBrick<B> {
+struct ChunkPlacedBrick<B> {
     l: u8,
     w: u8,
     h: u8,
@@ -592,7 +598,7 @@ struct Chunk<B, C> {
     width: u8,
     height: u8,
     ws_included: Vec<BTreeSet<u8>>,
-    bricks: Vec<SectionPlacedBrick<B>>
+    bricks: Vec<ChunkPlacedBrick<B>>
 }
 
 impl<B: Brick, C: Color> Chunk<B, C> {
@@ -617,13 +623,13 @@ impl<B: Brick, C: Color> Chunk<B, C> {
             }
         }
 
-        let bricks: Vec<SectionPlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
+        let bricks: Vec<ChunkPlacedBrick<B>> = layers.into_iter().flat_map(|(height, h_index)| {
             let sizes = &bricks_by_height[&height];
             Chunk::<B, C>::reduce_single_layer(sizes, self.length, self.ws_included.clone())
                 .into_iter()
-                .map(move |placed_brick| SectionPlacedBrick {
-                    l: self.l + placed_brick.l,
-                    w: self.w + placed_brick.w,
+                .map(move |placed_brick| ChunkPlacedBrick {
+                    l: placed_brick.l,
+                    w: placed_brick.w,
                     h: h_index,
                     brick: placed_brick.brick
                 })
@@ -639,7 +645,7 @@ impl<B: Brick, C: Color> Chunk<B, C> {
             width: self.width,
             height: self.height,
             ws_included: self.ws_included,
-            bricks,
+            bricks
         }
     }
 
