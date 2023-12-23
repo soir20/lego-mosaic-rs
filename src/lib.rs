@@ -220,8 +220,12 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                 w,
                 h,
                 chunks.into_iter().map(|chunk| {
-                    let bricks_by_height = &bricks_by_type[&chunk.unit_brick];
-                    chunk.reduce_bricks(bricks_by_height)
+                    if bricks_by_type.contains_key(&chunk.unit_brick) {
+                        let bricks_by_height = &bricks_by_type[&chunk.unit_brick];
+                        chunk.reduce_bricks(bricks_by_height)
+                    } else {
+                        chunk
+                    }
                 }).collect()
             ))
             .collect();
