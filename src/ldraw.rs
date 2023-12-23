@@ -5,6 +5,13 @@ use nalgebra_glm::{rotate_y, TMat4};
 use palette::Srgba;
 use crate::{Brick, Color, Mosaic};
 
+const BASE_TRANSFORM: TMat4<f64> = TMat4::new(
+    1f64, 0f64, 0f64, 0f64,
+    0f64, 1f64, 0f64, 0f64,
+    0f64, 0f64, 1f64, 0f64,
+    0f64, 0f64, 0f64, 1f64
+);
+
 pub struct SubPartCommand<'a> {
     color: u16,
     x: f64,
@@ -178,15 +185,9 @@ impl<'a> LdrawBrick<'a> {
         let z = (mosaic.width() as f64 - w as f64 - self.width as f64 / 2f64) * ldraw_horizontal_scale;
 
         // Use x=0, y=0, z=0 to rotate about part's origin
-        let base_transform = TMat4::new(
-            1f64, 0f64, 0f64, 0f64,
-            0f64, 1f64, 0f64, 0f64,
-            0f64, 0f64, 1f64, 0f64,
-            0f64, 0f64, 0f64, 1f64
-        );
         let transform = match self.rotated {
-            true => rotate_y(&base_transform, f64::to_radians(90f64)),
-            false => base_transform
+            true => rotate_y(&BASE_TRANSFORM, f64::to_radians(90f64)),
+            false => BASE_TRANSFORM
         };
 
         let a = transform.m11;
