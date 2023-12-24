@@ -16,15 +16,7 @@ impl<C: Color> EuclideanDistancePalette<C> {
         let mapped_palette = palette.iter()
             .map(|&color| {
                 let srgba = color.into();
-                EuclideanDistanceKdPoint(
-                    color,
-                    [
-                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Red] as usize],
-                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Green] as usize],
-                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Blue] as usize],
-                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Alpha] as usize]
-                    ]
-                )
+                EuclideanDistanceKdPoint(color, to_linear(srgba))
             }).collect();
         EuclideanDistancePalette { tree: KdTree::build_by_ordered_float(mapped_palette) }
     }
@@ -32,12 +24,7 @@ impl<C: Color> EuclideanDistancePalette<C> {
 
 impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
     fn nearest(&self, color: RawColor) -> Option<C> {
-        let components = [
-            SRGBA_TO_LINEAR[color[RgbaIndex::Red] as usize],
-            SRGBA_TO_LINEAR[color[RgbaIndex::Green] as usize],
-            SRGBA_TO_LINEAR[color[RgbaIndex::Blue] as usize],
-            SRGBA_TO_LINEAR[color[RgbaIndex::Alpha] as usize]
-        ];
+        let components = to_linear(color);
         self.tree.nearest(&components).map(|result| result.item.0)
     }
 }
@@ -100,6 +87,15 @@ struct Lab<C> {
 // ====================
 // PRIVATE FUNCTIONS
 // ====================
+
+fn to_linear(color: RawColor) -> [f64; 4] {
+    [
+        SRGBA_TO_LINEAR[color[RgbaIndex::Red] as usize],
+        SRGBA_TO_LINEAR[color[RgbaIndex::Green] as usize],
+        SRGBA_TO_LINEAR[color[RgbaIndex::Blue] as usize],
+        SRGBA_TO_LINEAR[color[RgbaIndex::Alpha] as usize]
+    ]
+}
 
 fn to_lab(color: RawColor) -> palette::Lab {
     let linear_color: LinSrgba<f32> = Srgba::new(
