@@ -1,4 +1,6 @@
 use kd_tree::{KdPoint, KdTree};
+use palette::{IntoColor, LinSrgba, Srgba};
+use palette::color_difference::HyAb;
 use crate::{Color, Palette, RawColor, RgbaIndex};
 
 // ====================
@@ -40,6 +42,39 @@ impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
     }
 }
 
+pub struct HyAbPalette<C> {
+    palette: Vec<Lab<C>>
+}
+
+impl<C: Color> HyAbPalette<C> {
+    pub fn new(palette: &[C]) -> Self {
+        HyAbPalette {
+            palette: palette.iter().map(|&original| Lab {
+                original,
+                lab: to_lab(original.into())
+            }).collect()
+        }
+    }
+}
+
+impl<C: Color> Palette<C> for HyAbPalette<C> {
+    fn nearest(&self, color: RawColor) -> Option<C> {
+        let lab_color = to_lab(color);
+
+        self.palette.iter()
+            .fold((None, f32::INFINITY), |(best_color, best_distance), color| {
+                let distance = lab_color.hybrid_distance(color.lab);
+                if distance < best_distance {
+                    (Some(color), distance)
+                } else {
+                    (best_color, best_distance)
+                }
+            })
+            .0
+            .map(|color| color.original)
+    }
+}
+
 // ====================
 // PRIVATE STRUCTS
 // ====================
@@ -56,6 +91,30 @@ impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
         self.1[i]
     }
 }
+
+struct Lab<C> {
+    original: C,
+    lab: palette::Lab
+}
+
+// ====================
+// PRIVATE FUNCTIONS
+// ====================
+
+fn to_lab(color: RawColor) -> palette::Lab {
+    let linear_color: LinSrgba<f32> = Srgba::new(
+        color[RgbaIndex::Red],
+        color[RgbaIndex::Green],
+        color[RgbaIndex::Blue],
+        color[RgbaIndex::Red]
+    ).into_linear();
+
+    linear_color.into_color()
+}
+
+// ====================
+// PRIVATE CONSTANTS
+// ====================
 
 const SRGBA_TO_LINEAR: [f64; 256] = [
     0.0,
