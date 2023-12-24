@@ -10,7 +10,6 @@ pub mod ldraw;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
-use std::ops::Index;
 use boolvec::BoolVec;
 
 // This API uses l, w, and h coordinate axes, which refer to length, width, and height,
@@ -72,19 +71,30 @@ pub trait Palette<C> {
 // PUBLIC STRUCTS
 // ====================
 
-pub enum RgbaIndex {
-    Red,
-    Green,
-    Blue,
-    Alpha
-}
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Srgba<T> {
     red: T,
     green: T,
     blue: T,
     alpha: T
+}
+
+impl<T> Srgba<T> {
+    pub fn red(&self) -> &T {
+        &self.red
+    }
+
+    pub fn green(&self) -> &T {
+        &self.green
+    }
+
+    pub fn blue(&self) -> &T {
+        &self.blue
+    }
+
+    pub fn alpha(&self) -> &T {
+        &self.alpha
+    }
 }
 
 impl Srgba<u8> {
@@ -94,19 +104,6 @@ impl Srgba<u8> {
             green,
             blue,
             alpha
-        }
-    }
-}
-
-impl<T> Index<RgbaIndex> for Srgba<T> {
-    type Output = T;
-
-    fn index(&self, index: RgbaIndex) -> &Self::Output {
-        match index {
-            RgbaIndex::Red => &self.red,
-            RgbaIndex::Green => &self.green,
-            RgbaIndex::Blue => &self.blue,
-            RgbaIndex::Alpha => &self.alpha
         }
     }
 }
