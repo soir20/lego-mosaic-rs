@@ -1,5 +1,5 @@
-#[cfg(feature = "distance")]
-pub mod distance;
+#[cfg(feature = "palette")]
+pub mod palette;
 
 #[cfg(feature = "image")]
 pub mod image;
@@ -777,7 +777,7 @@ impl Pixels<RawColor> {
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::distance::EuclideanDistancePalette;
+    use crate::palette::EuclideanDistancePalette;
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
