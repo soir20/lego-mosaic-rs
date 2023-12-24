@@ -9,11 +9,12 @@ edition = "2021"
 boolvec = "0.2.6"
 kd-tree = { version = "0.5.1", optional = true }
 typenum = { version = "1.17.0", optional = true }
+palette = { version = "0.7.3", optional = true }
 nalgebra-glm = { version = "0.18.0", optional = true }
 image = { version = "0.24.7", optional = true }
 
 [features]
 default = ["distance", "image", "ldraw"]
-distance = ["dep:kd-tree", "dep:typenum"]
+distance = ["dep:kd-tree", "dep:typenum", "dep:palette"]
 image = ["dep:image"]
 ldraw = ["dep:nalgebra-glm"]
