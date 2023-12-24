@@ -11,7 +11,19 @@ pub struct EuclideanDistancePalette<C: Color> {
 
 impl<C: Color> EuclideanDistancePalette<C> {
     pub fn new(palette: &[C]) -> Self {
-        let mapped_palette = palette.iter().map(|&color| EuclideanDistanceKdPoint(color)).collect();
+        let mapped_palette = palette.iter()
+            .map(|&color| {
+                let srgba = color.into();
+                EuclideanDistanceKdPoint(
+                    color,
+                    [
+                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Red] as usize],
+                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Green] as usize],
+                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Blue] as usize],
+                        SRGBA_TO_LINEAR[srgba[RgbaIndex::Alpha] as usize]
+                    ]
+                )
+            }).collect();
         EuclideanDistancePalette { tree: KdTree::build_by_ordered_float(mapped_palette) }
     }
 }
@@ -32,7 +44,7 @@ impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
 // PRIVATE STRUCTS
 // ====================
 
-struct EuclideanDistanceKdPoint<C>(C);
+struct EuclideanDistanceKdPoint<C>(C, [f64; 4]);
 
 impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
 
@@ -41,14 +53,7 @@ impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
     type Dim = typenum::U4;
 
     fn at(&self, i: usize) -> Self::Scalar {
-        let raw_color = self.0.into();
-        match i {
-            0 => SRGBA_TO_LINEAR[raw_color[RgbaIndex::Red] as usize],
-            1 => SRGBA_TO_LINEAR[raw_color[RgbaIndex::Green] as usize],
-            2 => SRGBA_TO_LINEAR[raw_color[RgbaIndex::Blue] as usize],
-            3 => SRGBA_TO_LINEAR[raw_color[RgbaIndex::Alpha] as usize],
-            _ => panic!("KD tree tried to access invalid color component")
-        }
+        self.1[i]
     }
 }
 
