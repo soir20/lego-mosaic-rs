@@ -36,9 +36,13 @@ pub struct HyAbPalette<C> {
 impl<C: Color> HyAbPalette<C> {
     pub fn new(palette: &[C]) -> Self {
         HyAbPalette {
-            palette: palette.iter().map(|&original| Lab {
-                original,
-                lab: to_lab(original.into())
+            palette: palette.iter().map(|&original| {
+                let srgba = original.into();
+                Lab {
+                    original,
+                    linear_alpha: to_linear(srgba)[3] as f32,
+                    lab: to_lab(srgba)
+                }
             }).collect()
         }
     }
@@ -46,13 +50,19 @@ impl<C: Color> HyAbPalette<C> {
 
 impl<C: Color> Palette<C> for HyAbPalette<C> {
     fn nearest(&self, color: RawColor) -> Option<C> {
+        let linear_alpha = to_linear(color)[3] as f32;
         let lab_color = to_lab(color);
 
         self.palette.iter()
-            .fold((None, f32::INFINITY), |(best_color, best_distance), color| {
-                let distance = lab_color.hybrid_distance(color.lab);
+            .fold((None, f32::INFINITY), |(best_color, best_distance), candidate| {
+
+                /* HyAb does not consider the alpha channel, so weight it similarly to Euclidean distance.
+                   The maximum HyAb distance is 100, so the alpha distance is clamped to a scale of 0-100. */
+                let alpha_distance = 0.25f32 * ((linear_alpha - candidate.linear_alpha).abs() * 100f32);
+                let distance = 0.75f32 * lab_color.hybrid_distance(candidate.lab) + alpha_distance;
+
                 if distance < best_distance {
-                    (Some(color), distance)
+                    (Some(candidate), distance)
                 } else {
                     (best_color, best_distance)
                 }
@@ -81,6 +91,7 @@ impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
 
 struct Lab<C> {
     original: C,
+    linear_alpha: f32,
     lab: palette::Lab
 }
 
