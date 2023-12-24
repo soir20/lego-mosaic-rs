@@ -6,12 +6,12 @@ use crate::{Color, Palette, RawColor, RgbaIndex};
 // ====================
 
 pub struct EuclideanDistancePalette<C: Color> {
-    tree: KdTree<ColorKdPoint<C>>
+    tree: KdTree<EuclideanDistanceKdPoint<C>>
 }
 
 impl<C: Color> EuclideanDistancePalette<C> {
     pub fn new(palette: &[C]) -> Self {
-        let mapped_palette = palette.iter().map(|&color| ColorKdPoint(color)).collect();
+        let mapped_palette = palette.iter().map(|&color| EuclideanDistanceKdPoint(color)).collect();
         EuclideanDistancePalette { tree: KdTree::build_by_ordered_float(mapped_palette) }
     }
 }
@@ -32,9 +32,9 @@ impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
 // PRIVATE STRUCTS
 // ====================
 
-struct ColorKdPoint<C>(C);
+struct EuclideanDistanceKdPoint<C>(C);
 
-impl<C: Color> KdPoint for ColorKdPoint<C> {
+impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
 
     // Use f64 to allow for multiplication, subtraction without overflow
     type Scalar = f64;
