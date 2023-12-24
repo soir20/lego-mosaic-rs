@@ -43,25 +43,7 @@ impl<C: Color> HyAbPalette<C> {
 
 impl<C: Color> Palette<C> for HyAbPalette<C> {
     fn nearest(&self, color: RawColor) -> Option<C> {
-        let linear_alpha = to_linear(color)[3] as f32;
-        let lab_color = to_lab(color);
-
-        self.palette.iter()
-            .fold((None, f32::INFINITY), |(best_color, best_distance), candidate| {
-
-                /* HyAb does not consider the alpha channel, so weight it similarly to Euclidean distance.
-                   The maximum HyAb distance is 100, so the alpha distance is clamped to a scale of 0-100. */
-                let alpha_distance = 0.25f32 * ((linear_alpha - candidate.linear_alpha).abs() * 100f32);
-                let distance = 0.75f32 * lab_color.hybrid_distance(candidate.lab) + alpha_distance;
-
-                if distance < best_distance {
-                    (Some(candidate), distance)
-                } else {
-                    (best_color, best_distance)
-                }
-            })
-            .0
-            .map(|color| color.original)
+        lab_nearest(&self.palette, color, |given_color, candidate| given_color.hybrid_distance(candidate))
     }
 }
 
@@ -79,25 +61,7 @@ impl<C: Color> Ciede2000Palette<C> {
 
 impl<C: Color> Palette<C> for Ciede2000Palette<C> {
     fn nearest(&self, color: RawColor) -> Option<C> {
-        let linear_alpha = to_linear(color)[3] as f32;
-        let lab_color = to_lab(color);
-
-        self.palette.iter()
-            .fold((None, f32::INFINITY), |(best_color, best_distance), candidate| {
-
-                /* CIEDE2000 does not consider the alpha channel, so weight it similarly to Euclidean distance.
-                   The maximum CIEDE2000 distance is 100, so the alpha distance is clamped to a scale of 0-100. */
-                let alpha_distance = 0.25f32 * ((linear_alpha - candidate.linear_alpha).abs() * 100f32);
-                let distance = 0.75f32 * lab_color.difference(candidate.lab) + alpha_distance;
-
-                if distance < best_distance {
-                    (Some(candidate), distance)
-                } else {
-                    (best_color, best_distance)
-                }
-            })
-            .0
-            .map(|color| color.original)
+        lab_nearest(&self.palette, color, |given_color, candidate| given_color.difference(candidate))
     }
 }
 
@@ -128,17 +92,6 @@ struct Lab<C> {
 // PRIVATE FUNCTIONS
 // ====================
 
-fn lab_palette<C: Color>(palette: &[C]) -> Vec<Lab<C>> {
-    palette.iter().map(|&original| {
-        let srgba = original.into();
-        Lab {
-            original,
-            linear_alpha: to_linear(srgba)[3] as f32,
-            lab: to_lab(srgba)
-        }
-    }).collect()
-}
-
 fn to_linear(color: RawColor) -> [f64; 4] {
     let linear: LinSrgba<f64> = Srgba::new(*color.red(), *color.green(), *color.blue(), *color.alpha()).into_linear();
     linear.into()
@@ -153,4 +106,37 @@ fn to_lab(color: RawColor) -> palette::Lab {
     ).into_linear();
 
     linear_color.into_color()
+}
+
+fn lab_palette<C: Color>(palette: &[C]) -> Vec<Lab<C>> {
+    palette.iter().map(|&original| {
+        let srgba = original.into();
+        Lab {
+            original,
+            linear_alpha: to_linear(srgba)[3] as f32,
+            lab: to_lab(srgba)
+        }
+    }).collect()
+}
+
+fn lab_nearest<C: Color>(palette: &[Lab<C>], color: RawColor, diff_fn: impl Fn(palette::Lab, palette::Lab) -> f32) -> Option<C> {
+    let linear_alpha = to_linear(color)[3] as f32;
+    let lab_color = to_lab(color);
+
+    palette.iter()
+        .fold((None, f32::INFINITY), |(best_color, best_distance), candidate| {
+
+            /* Lab does not consider the alpha channel, so weight it similarly to Euclidean distance.
+               The maximum Lab distance is 100, so the alpha distance is clamped to a scale of 0-100. */
+            let alpha_distance = 0.25f32 * ((linear_alpha - candidate.linear_alpha).abs() * 100f32);
+            let distance = 0.75f32 * diff_fn(lab_color, candidate.lab) + alpha_distance;
+
+            if distance < best_distance {
+                (Some(candidate), distance)
+            } else {
+                (best_color, best_distance)
+            }
+        })
+        .0
+        .map(|color| color.original)
 }
