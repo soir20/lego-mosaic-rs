@@ -342,8 +342,8 @@ pub const DARK_TURQUOISE: LdrawColor = LdrawColor::new(3, 6, 157, 159, 255);
 pub const RED: LdrawColor = LdrawColor::new(4, 180, 0, 0, 255);
 pub const DARK_PINK: LdrawColor = LdrawColor::new(5, 211, 53, 157, 255);
 pub const BROWN: LdrawColor = LdrawColor::new(6, 84, 51, 36, 255);
-pub const LIGHT_GREY: LdrawColor = LdrawColor::new(7, 138, 146, 141, 255);
-pub const DARK_GREY: LdrawColor = LdrawColor::new(8, 84, 89, 85, 255);
+pub const LIGHT_GRAY: LdrawColor = LdrawColor::new(7, 138, 146, 141, 255);
+pub const DARK_GRAY: LdrawColor = LdrawColor::new(8, 84, 89, 85, 255);
 pub const LIGHT_BLUE: LdrawColor = LdrawColor::new(9, 151, 203, 217, 255);
 pub const BRIGHT_GREEN: LdrawColor = LdrawColor::new(10, 88, 171, 65, 255);
 pub const LIGHT_TURQUOISE: LdrawColor = LdrawColor::new(11, 0, 170, 164, 255);
@@ -367,8 +367,8 @@ pub const LAVENDER: LdrawColor = LdrawColor::new(31, 205, 164, 222, 255);
 pub const VERY_LIGHT_ORANGE: LdrawColor = LdrawColor::new(68, 253, 195, 131, 255);
 pub const BRIGHT_REDDISH_LILAC: LdrawColor = LdrawColor::new(69, 138, 18, 168, 255);
 pub const REDDISH_BROWN: LdrawColor = LdrawColor::new(70, 95, 49, 9, 255);
-pub const LIGHT_BLUISH_GREY: LdrawColor = LdrawColor::new(71, 150, 150, 150, 255);
-pub const DARK_BLUISH_GREY: LdrawColor = LdrawColor::new(72, 100, 100, 100, 255);
+pub const LIGHT_BLUISH_GRAY: LdrawColor = LdrawColor::new(71, 150, 150, 150, 255);
+pub const DARK_BLUISH_GRAY: LdrawColor = LdrawColor::new(72, 100, 100, 100, 255);
 pub const MEDIUM_BLUE: LdrawColor = LdrawColor::new(73, 115, 150, 200, 255);
 pub const MEDIUM_GREEN: LdrawColor = LdrawColor::new(74, 127, 196, 117, 255);
 pub const LIGHT_PINK: LdrawColor = LdrawColor::new(77, 254, 204, 207, 255);
@@ -386,7 +386,7 @@ pub const AQUA: LdrawColor = LdrawColor::new(118, 156, 214, 204, 255);
 pub const LIGHT_LIME: LdrawColor = LdrawColor::new(120, 222, 234, 146, 255);
 pub const LIGHT_ORANGE: LdrawColor = LdrawColor::new(125, 249, 167, 119, 255);
 pub const DARK_NOUGAT: LdrawColor = LdrawColor::new(128, 173, 97, 64, 255);
-pub const VERY_LIGHT_BLUISH_GREY: LdrawColor = LdrawColor::new(151, 200, 200, 200, 255);
+pub const VERY_LIGHT_BLUISH_GRAY: LdrawColor = LdrawColor::new(151, 200, 200, 200, 255);
 pub const BRIGHT_LIGHT_ORANGE: LdrawColor = LdrawColor::new(191, 252, 172, 0, 255);
 pub const BRIGHT_LIGHT_BLUE: LdrawColor = LdrawColor::new(212, 157, 195, 247, 255);
 pub const RUST: LdrawColor = LdrawColor::new(216, 135, 43, 23, 255);
@@ -418,7 +418,7 @@ pub const SAND_BLUE: LdrawColor = LdrawColor::new(379, 112, 129, 154, 255);
 pub const FABULAND_BROWN: LdrawColor = LdrawColor::new(450, 210, 119, 68, 255);
 pub const MEDIUM_ORANGE: LdrawColor = LdrawColor::new(462, 245, 134, 36, 255);
 pub const DARK_ORANGE: LdrawColor = LdrawColor::new(484, 145, 80, 28, 255);
-pub const VERY_LIGHT_GREY: LdrawColor = LdrawColor::new(503, 188, 180, 165, 255);
+pub const VERY_LIGHT_GRAY: LdrawColor = LdrawColor::new(503, 188, 180, 165, 255);
 pub const LIGHT_ORANGE_BROWN: LdrawColor = LdrawColor::new(507, 250, 156, 28, 255);
 pub const FABULAND_RED: LdrawColor = LdrawColor::new(508, 255, 128, 20, 255);
 pub const FABULAND_ORANGE: LdrawColor = LdrawColor::new(509, 207, 138, 71, 255);
@@ -456,12 +456,12 @@ pub const CHROME_GOLD: LdrawColor = LdrawColor::new(334, 223, 193, 118, 255);
 pub const CHROME_SILVER: LdrawColor = LdrawColor::new(383, 206, 206, 206, 255);
 pub const PEARL_BLACK: LdrawColor = LdrawColor::new(83, 10, 19, 39, 255);
 pub const COPPER: LdrawColor = LdrawColor::new(134, 118, 77, 59, 255);
-pub const PEARL_LIGHT_GREY: LdrawColor = LdrawColor::new(135, 160, 160, 160, 255);
+pub const PEARL_LIGHT_GRAY: LdrawColor = LdrawColor::new(135, 160, 160, 160, 255);
 pub const METALLIC_BLUE: LdrawColor = LdrawColor::new(137, 91, 117, 144, 255);
 pub const PEARL_LIGHT_GOLD: LdrawColor = LdrawColor::new(142, 222, 172, 102, 255);
 pub const PEARL_DARK_GOLD: LdrawColor = LdrawColor::new(147, 131, 114, 79, 255);
-pub const PEARL_DARK_GREY: LdrawColor = LdrawColor::new(148, 72, 77, 72, 255);
-pub const PEARL_VERY_LIGHT_GREY: LdrawColor = LdrawColor::new(150, 152, 155, 153, 255);
+pub const PEARL_DARK_GRAY: LdrawColor = LdrawColor::new(148, 72, 77, 72, 255);
+pub const PEARL_VERY_LIGHT_GRAY: LdrawColor = LdrawColor::new(150, 152, 155, 153, 255);
 pub const PEARL_RED: LdrawColor = LdrawColor::new(176, 148, 81, 72, 255);
 pub const PEARL_YELLOW: LdrawColor = LdrawColor::new(178, 171, 103, 58, 255);
 pub const PEARL_SILVER: LdrawColor = LdrawColor::new(179, 137, 135, 136, 255);
@@ -475,7 +475,7 @@ pub const PEARL_GOLD: LdrawColor = LdrawColor::new(297, 170, 127, 46, 255);
 pub const METALLIC_SILVER: LdrawColor = LdrawColor::new(80, 118, 118, 118, 255);
 pub const METALLIC_GREEN: LdrawColor = LdrawColor::new(81, 194, 192, 111, 255);
 pub const METALLIC_GOLD: LdrawColor = LdrawColor::new(82, 219, 172, 52, 255);
-pub const METALLIC_DARK_GREY: LdrawColor = LdrawColor::new(87, 62, 60, 57, 255);
+pub const METALLIC_DARK_GRAY: LdrawColor = LdrawColor::new(87, 62, 60, 57, 255);
 pub const METALLIC_COPPER: LdrawColor = LdrawColor::new(300, 194, 127, 83, 255);
 pub const METALLIC_LIGHT_BLUE: LdrawColor = LdrawColor::new(10045, 151, 203, 217, 255);
 pub const METALLIC_PINK: LdrawColor = LdrawColor::new(10046, 173, 101, 154, 255);
@@ -507,8 +507,8 @@ pub const SOLID_COLORS: &[LdrawColor] = &[
     RED,
     DARK_PINK,
     BROWN,
-    LIGHT_GREY,
-    DARK_GREY,
+    LIGHT_GRAY,
+    DARK_GRAY,
     LIGHT_BLUE,
     BRIGHT_GREEN,
     LIGHT_TURQUOISE,
@@ -532,8 +532,8 @@ pub const SOLID_COLORS: &[LdrawColor] = &[
     VERY_LIGHT_ORANGE,
     BRIGHT_REDDISH_LILAC,
     REDDISH_BROWN,
-    LIGHT_BLUISH_GREY,
-    DARK_BLUISH_GREY,
+    LIGHT_BLUISH_GRAY,
+    DARK_BLUISH_GRAY,
     MEDIUM_BLUE,
     MEDIUM_GREEN,
     LIGHT_PINK,
@@ -551,7 +551,7 @@ pub const SOLID_COLORS: &[LdrawColor] = &[
     LIGHT_LIME,
     LIGHT_ORANGE,
     DARK_NOUGAT,
-    VERY_LIGHT_BLUISH_GREY,
+    VERY_LIGHT_BLUISH_GRAY,
     BRIGHT_LIGHT_ORANGE,
     BRIGHT_LIGHT_BLUE,
     RUST,
@@ -583,11 +583,59 @@ pub const SOLID_COLORS: &[LdrawColor] = &[
     FABULAND_BROWN,
     MEDIUM_ORANGE,
     DARK_ORANGE,
-    VERY_LIGHT_GREY,
+    VERY_LIGHT_GRAY,
     LIGHT_ORANGE_BROWN,
     FABULAND_RED,
     FABULAND_ORANGE,
     FABULAND_LIME
+];
+
+pub const ACTIVE_SOLID_COLORS: &[LdrawColor] = &[
+    WHITE,
+    LIGHT_BLUISH_GRAY,
+    DARK_GRAY,
+    DARK_BLUISH_GRAY,
+    BLACK,
+    DARK_RED,
+    RED,
+    CORAL,
+    DARK_BROWN,
+    MEDIUM_BROWN,
+    REDDISH_BROWN,
+    DARK_TAN,
+    TAN,
+    LIGHT_NOUGAT,
+    MEDIUM_TAN,
+    NOUGAT,
+    MEDIUM_NOUGAT,
+    DARK_ORANGE,
+    ORANGE,
+    BRIGHT_LIGHT_ORANGE,
+    YELLOW,
+    BRIGHT_LIGHT_YELLOW,
+    NEON_YELLOW,
+    YELLOWISH_GREEN,
+    LIME,
+    OLIVE_GREEN,
+    DARK_GREEN,
+    GREEN,
+    BRIGHT_GREEN,
+    SAND_GREEN,
+    DARK_TURQUOISE,
+    LIGHT_AQUA,
+    DARK_BLUE,
+    BLUE,
+    DARK_AZURE,
+    MEDIUM_AZURE,
+    MEDIUM_BLUE,
+    BRIGHT_LIGHT_BLUE,
+    SAND_BLUE,
+    PURPLE,
+    MEDIUM_LAVENDER,
+    LAVENDER,
+    MAGENTA,
+    DARK_PINK,
+    BRIGHT_PINK
 ];
 
 pub const TRANSLUCENT_COLORS: &[LdrawColor] = &[
@@ -617,6 +665,22 @@ pub const TRANSLUCENT_COLORS: &[LdrawColor] = &[
     TRANS_LIGHT_BLUE_VIOLET
 ];
 
+pub const ACTIVE_TRANSLUCENT_COLORS: &[LdrawColor] = &[
+    TRANS_CLEAR,
+    TRANS_BLACK,
+    TRANS_RED,
+    TRANS_NEON_ORANGE,
+    TRANS_ORANGE,
+    TRANS_YELLOW,
+    TRANS_NEON_GREEN,
+    TRANS_BRIGHT_GREEN,
+    TRANS_GREEN,
+    TRANS_DARK_BLUE,
+    TRANS_LIGHT_BLUE,
+    TRANS_PURPLE,
+    TRANS_DARK_PINK
+];
+
 pub const CHROME_COLORS: &[LdrawColor] = &[
     CHROME_ANTIQUE_BRASS,
     CHROME_BLUE,
@@ -627,15 +691,20 @@ pub const CHROME_COLORS: &[LdrawColor] = &[
     CHROME_SILVER
 ];
 
+pub const ACTIVE_CHROME_COLORS: &[LdrawColor] = &[
+    CHROME_GOLD,
+    CHROME_SILVER
+];
+
 pub const PEARLESCENT_COLORS: &[LdrawColor] = &[
     PEARL_BLACK,
     COPPER,
-    PEARL_LIGHT_GREY,
+    PEARL_LIGHT_GRAY,
     METALLIC_BLUE,
     PEARL_LIGHT_GOLD,
     PEARL_DARK_GOLD,
-    PEARL_DARK_GREY,
-    PEARL_VERY_LIGHT_GREY,
+    PEARL_DARK_GRAY,
+    PEARL_VERY_LIGHT_GRAY,
     PEARL_RED,
     PEARL_YELLOW,
     PEARL_SILVER,
@@ -648,21 +717,36 @@ pub const PEARLESCENT_COLORS: &[LdrawColor] = &[
     PEARL_GOLD
 ];
 
+pub const ACTIVE_PEARLESCENT_COLORS: &[LdrawColor] = &[
+    PEARL_SILVER,
+    PEARL_DARK_GRAY,
+    PEARL_GOLD
+];
+
 pub const METALLIC_COLORS: &[LdrawColor] = &[
     METALLIC_SILVER,
     METALLIC_GREEN,
     METALLIC_GOLD,
-    METALLIC_DARK_GREY,
+    METALLIC_DARK_GRAY,
     METALLIC_COPPER,
     METALLIC_LIGHT_BLUE,
     METALLIC_PINK,
     METALLIC_LIGHT_PINK
 ];
 
+pub const ACTIVE_METALLIC_COLORS: &[LdrawColor] = &[
+    METALLIC_SILVER,
+    METALLIC_GOLD
+];
+
 pub const MILKY_COLORS: &[LdrawColor] = &[
     MILKY_WHITE,
     GLOW_IN_DARK_OPAQUE,
     GLOW_IN_DARK_TRANS,
+    GLOW_IN_DARK_WHITE
+];
+
+pub const ACTIVE_MILKY_COLORS: &[LdrawColor] = &[
     GLOW_IN_DARK_WHITE
 ];
 
@@ -681,4 +765,10 @@ pub const GLITTER_COLORS: &[LdrawColor] = &[
     OPAL_TRANS_GREEN,
     GLITTER_TRANS_BRIGHT_GREEN,
     OPAL_TRANS_DARK_BLUE
+];
+
+pub const ACTIVE_GLITTER_COLORS: &[LdrawColor] = &[
+    GLITTER_TRANS_CLEAR,
+    GLITTER_TRANS_LIGHT_BLUE,
+    GLITTER_TRANS_PURPLE
 ];
