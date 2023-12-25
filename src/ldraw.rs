@@ -498,6 +498,43 @@ pub const OPAL_TRANS_PURPLE: LdrawColor = LdrawColor::new(365, 103, 31, 129, 200
 pub const OPAL_TRANS_GREEN: LdrawColor = LdrawColor::new(367, 35, 120, 65, 200);
 pub const GLITTER_TRANS_BRIGHT_GREEN: LdrawColor = LdrawColor::new(10351, 86, 230, 70, 128);
 pub const OPAL_TRANS_DARK_BLUE: LdrawColor = LdrawColor::new(10366, 0, 32, 160, 200);
+pub const SPECKLE_BLACK_COPPER: LdrawColor = LdrawColor::new(75, 171, 96, 56, 255);
+pub const SPECKLE_DARK_BLUISH_GRAY_SILVER: LdrawColor = LdrawColor::new(76, 137, 135, 136, 255);
+pub const SPECKLE_BLACK_SILVER: LdrawColor = LdrawColor::new(132, 137, 135, 136, 255);
+pub const SPECKLE_BLACK_GOLD: LdrawColor = LdrawColor::new(133, 219, 172, 52, 255);
+pub const RUBBER_YELLOW: LdrawColor = LdrawColor::new(65, 250, 200, 10, 255);
+pub const RUBBER_BLACK: LdrawColor = LdrawColor::new(256, 27, 42, 52, 255);
+pub const RUBBER_BLUE: LdrawColor = LdrawColor::new(273, 30, 90, 168, 255);
+pub const RUBBER_RED: LdrawColor = LdrawColor::new(324, 180, 0, 0, 255);
+pub const RUBBER_ORANGE: LdrawColor = LdrawColor::new(350, 214, 121, 35, 255);
+pub const RUBBER_LIGHT_GRAY: LdrawColor = LdrawColor::new(375, 138, 146, 141, 255);
+pub const RUBBER_DARK_BLUE: LdrawColor = LdrawColor::new(406, 25, 50, 90, 255);
+pub const RUBBER_PURPLE: LdrawColor = LdrawColor::new(449, 103, 31, 129, 255);
+pub const RUBBER_LIME: LdrawColor = LdrawColor::new(490, 165, 202, 24, 255);
+pub const RUBBER_LIGHT_BLUISH_GRAY: LdrawColor = LdrawColor::new(496, 150, 150, 150, 255);
+pub const RUBBER_FLAT_SILVER: LdrawColor = LdrawColor::new(504, 137, 135, 136, 255);
+pub const RUBBER_WHITE: LdrawColor = LdrawColor::new(511, 244, 244, 244, 255);
+pub const RUBBER_GREEN: LdrawColor = LdrawColor::new(10002, 0, 133, 43, 255);
+pub const RUBBER_BRIGHT_GREEN: LdrawColor = LdrawColor::new(10010, 88, 171, 65, 255);
+pub const RUBBER_MAGENTA: LdrawColor = LdrawColor::new(10026, 144, 31, 118, 255);
+pub const RUBBER_MEDIUM_LAVENDER: LdrawColor = LdrawColor::new(10030, 160, 110, 185, 255);
+pub const RUBBER_LAVENDER: LdrawColor = LdrawColor::new(10031, 205, 164, 222, 255);
+pub const RUBBER_REDDISH_BROWN: LdrawColor = LdrawColor::new(10070, 95, 49, 9, 255);
+pub const RUBBER_MEDIUM_BLUE: LdrawColor = LdrawColor::new(10073, 115, 150, 200, 255);
+pub const RUBBER_LIGHT_NOUGAT: LdrawColor = LdrawColor::new(10078, 255, 201, 149, 255);
+pub const RUBBER_BRIGHT_LIGHT_YELLOW: LdrawColor = LdrawColor::new(10226, 255, 236, 108, 255);
+pub const RUBBER_DARK_BROWN: LdrawColor = LdrawColor::new(10308, 53, 33, 0, 255);
+pub const RUBBER_DARK_RED: LdrawColor = LdrawColor::new(10320, 114, 0, 18, 255);
+pub const RUBBER_DARK_AZURE: LdrawColor = LdrawColor::new(10321, 70, 155, 195, 255);
+pub const RUBBER_MEDIUM_AZURE: LdrawColor = LdrawColor::new(10322, 104, 195, 226, 255);
+pub const RUBBER_LIGHT_AQUA: LdrawColor = LdrawColor::new(10323, 211, 242, 234, 255);
+pub const RUBBER_SAND_GREEN: LdrawColor = LdrawColor::new(10378, 112, 142, 124, 255);
+pub const RUBBER_DARK_ORANGE: LdrawColor = LdrawColor::new(10484, 145, 80, 28, 255);
+pub const RUBBER_TRANS_YELLOW: LdrawColor = LdrawColor::new(66, 245, 205, 47, 128);
+pub const RUBBER_TRANS_CLEAR: LdrawColor = LdrawColor::new(67, 252, 252, 252, 128);
+pub const RUBBER_TRANS_BRIGHT_GREEN: LdrawColor = LdrawColor::new(10035, 86, 230, 70, 128);
+pub const RUBBER_TRANS_RED: LdrawColor = LdrawColor::new(10036, 201, 26, 9, 128);
+pub const RUBBER_TRANS_LIGHT_BLUE: LdrawColor = LdrawColor::new(10043, 174, 233, 239, 128);
 
 pub const SOLID_COLORS: &[LdrawColor] = &[
     BLACK,
@@ -681,4 +718,50 @@ pub const GLITTER_COLORS: &[LdrawColor] = &[
     OPAL_TRANS_GREEN,
     GLITTER_TRANS_BRIGHT_GREEN,
     OPAL_TRANS_DARK_BLUE
+];
+
+pub const SPECKLE_COLORS: &[LdrawColor] = &[
+    SPECKLE_BLACK_COPPER,
+    SPECKLE_DARK_BLUISH_GRAY_SILVER,
+    SPECKLE_BLACK_SILVER,
+    SPECKLE_BLACK_GOLD
+];
+
+pub const RUBBER_SOLID_COLORS: &[LdrawColor] = &[
+    RUBBER_YELLOW,
+    RUBBER_BLACK,
+    RUBBER_BLUE,
+    RUBBER_RED,
+    RUBBER_ORANGE,
+    RUBBER_LIGHT_GRAY,
+    RUBBER_DARK_BLUE,
+    RUBBER_PURPLE,
+    RUBBER_LIME,
+    RUBBER_LIGHT_BLUISH_GRAY,
+    RUBBER_FLAT_SILVER,
+    RUBBER_WHITE,
+    RUBBER_GREEN,
+    RUBBER_BRIGHT_GREEN,
+    RUBBER_MAGENTA,
+    RUBBER_MEDIUM_LAVENDER,
+    RUBBER_LAVENDER,
+    RUBBER_REDDISH_BROWN,
+    RUBBER_MEDIUM_BLUE,
+    RUBBER_LIGHT_NOUGAT,
+    RUBBER_BRIGHT_LIGHT_YELLOW,
+    RUBBER_DARK_BROWN,
+    RUBBER_DARK_RED,
+    RUBBER_DARK_AZURE,
+    RUBBER_MEDIUM_AZURE,
+    RUBBER_LIGHT_AQUA,
+    RUBBER_SAND_GREEN,
+    RUBBER_DARK_ORANGE
+];
+
+pub const RUBBER_TRANSLUCENT_COLORS: &[LdrawColor] = &[
+    RUBBER_TRANS_YELLOW,
+    RUBBER_TRANS_CLEAR,
+    RUBBER_TRANS_BRIGHT_GREEN,
+    RUBBER_TRANS_RED,
+    RUBBER_TRANS_LIGHT_BLUE
 ];
