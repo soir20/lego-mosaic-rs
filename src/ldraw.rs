@@ -590,54 +590,6 @@ pub const SOLID_COLORS: &[LdrawColor] = &[
     FABULAND_LIME
 ];
 
-pub const ACTIVE_SOLID_COLORS: &[LdrawColor] = &[
-    WHITE,
-    LIGHT_BLUISH_GRAY,
-    DARK_GRAY,
-    DARK_BLUISH_GRAY,
-    BLACK,
-    DARK_RED,
-    RED,
-    CORAL,
-    DARK_BROWN,
-    MEDIUM_BROWN,
-    REDDISH_BROWN,
-    DARK_TAN,
-    TAN,
-    LIGHT_NOUGAT,
-    MEDIUM_TAN,
-    NOUGAT,
-    MEDIUM_NOUGAT,
-    DARK_ORANGE,
-    ORANGE,
-    BRIGHT_LIGHT_ORANGE,
-    YELLOW,
-    BRIGHT_LIGHT_YELLOW,
-    NEON_YELLOW,
-    YELLOWISH_GREEN,
-    LIME,
-    OLIVE_GREEN,
-    DARK_GREEN,
-    GREEN,
-    BRIGHT_GREEN,
-    SAND_GREEN,
-    DARK_TURQUOISE,
-    LIGHT_AQUA,
-    DARK_BLUE,
-    BLUE,
-    DARK_AZURE,
-    MEDIUM_AZURE,
-    MEDIUM_BLUE,
-    BRIGHT_LIGHT_BLUE,
-    SAND_BLUE,
-    MEDIUM_LILAC,
-    MEDIUM_LAVENDER,
-    LAVENDER,
-    MAGENTA,
-    DARK_PINK,
-    BRIGHT_PINK
-];
-
 pub const TRANSLUCENT_COLORS: &[LdrawColor] = &[
     TRANS_DARK_BLUE,
     TRANS_GREEN,
@@ -665,33 +617,12 @@ pub const TRANSLUCENT_COLORS: &[LdrawColor] = &[
     TRANS_LIGHT_BLUE_VIOLET
 ];
 
-pub const ACTIVE_TRANSLUCENT_COLORS: &[LdrawColor] = &[
-    TRANS_CLEAR,
-    TRANS_BLACK,
-    TRANS_RED,
-    TRANS_NEON_ORANGE,
-    TRANS_ORANGE,
-    TRANS_YELLOW,
-    TRANS_NEON_GREEN,
-    TRANS_BRIGHT_GREEN,
-    TRANS_GREEN,
-    TRANS_DARK_BLUE,
-    TRANS_LIGHT_BLUE,
-    TRANS_PURPLE,
-    TRANS_DARK_PINK
-];
-
 pub const CHROME_COLORS: &[LdrawColor] = &[
     CHROME_ANTIQUE_BRASS,
     CHROME_BLUE,
     CHROME_GREEN,
     CHROME_PINK,
     CHROME_BLACK,
-    CHROME_GOLD,
-    CHROME_SILVER
-];
-
-pub const ACTIVE_CHROME_COLORS: &[LdrawColor] = &[
     CHROME_GOLD,
     CHROME_SILVER
 ];
@@ -717,12 +648,6 @@ pub const PEARLESCENT_COLORS: &[LdrawColor] = &[
     PEARL_GOLD
 ];
 
-pub const ACTIVE_PEARLESCENT_COLORS: &[LdrawColor] = &[
-    PEARL_SILVER,
-    PEARL_DARK_GRAY,
-    PEARL_GOLD
-];
-
 pub const METALLIC_COLORS: &[LdrawColor] = &[
     METALLIC_SILVER,
     METALLIC_GREEN,
@@ -734,19 +659,10 @@ pub const METALLIC_COLORS: &[LdrawColor] = &[
     METALLIC_LIGHT_PINK
 ];
 
-pub const ACTIVE_METALLIC_COLORS: &[LdrawColor] = &[
-    METALLIC_SILVER,
-    METALLIC_GOLD
-];
-
 pub const MILKY_COLORS: &[LdrawColor] = &[
     MILKY_WHITE,
     GLOW_IN_DARK_OPAQUE,
     GLOW_IN_DARK_TRANS,
-    GLOW_IN_DARK_WHITE
-];
-
-pub const ACTIVE_MILKY_COLORS: &[LdrawColor] = &[
     GLOW_IN_DARK_WHITE
 ];
 
@@ -765,10 +681,4 @@ pub const GLITTER_COLORS: &[LdrawColor] = &[
     OPAL_TRANS_GREEN,
     GLITTER_TRANS_BRIGHT_GREEN,
     OPAL_TRANS_DARK_BLUE
-];
-
-pub const ACTIVE_GLITTER_COLORS: &[LdrawColor] = &[
-    GLITTER_TRANS_CLEAR,
-    GLITTER_TRANS_LIGHT_BLUE,
-    GLITTER_TRANS_PURPLE
 ];
