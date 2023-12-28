@@ -314,14 +314,14 @@ impl From<LdrawColor> for Srgba<u8> {
 impl Color for LdrawColor {}
 
 fn write<'a>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<LdrawBrick<'a>, LdrawColor>>,
-             mut id_fn: impl FnMut(LdrawBrick) -> &str, mosaic_width: u32) -> std::io::Result<usize> {
+             mut id_fn: impl FnMut(LdrawBrick) -> &str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
     let mut bytes = 0;
 
     for placement in bricks {
         let command = placement.brick.command(
             placement.l,
             placement.w,
-            placement.h,
+            placement.h + height_offset,
             placement.color,
             id_fn(placement.brick),
             mosaic_width
@@ -337,13 +337,13 @@ fn write<'a>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<Ldr
 }
 
 pub fn write_mosaic(buffer: &mut impl Write, mosaic: &Mosaic<LdrawBrick, LdrawColor>,
-                    id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
-    write(buffer, mosaic.iter(), id_fn, mosaic.width())
+                    id_fn: impl FnMut(LdrawBrick) -> &str, height_offset: u32) -> std::io::Result<usize> {
+    write(buffer, mosaic.iter(), id_fn, mosaic.width(), height_offset)
 }
 
 pub fn write_base(buffer: &mut impl Write, base: &Base<LdrawBrick, LdrawColor>,
                     id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
-    write(buffer, base.iter(), id_fn, base.width())
+    write(buffer, base.iter(), id_fn, base.width(), 0)
 }
 
 pub const BLACK: LdrawColor = LdrawColor::new(0, 27, 42, 52, 255);
