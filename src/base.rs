@@ -1,3 +1,4 @@
+use std::iter;
 use crate::{Brick, Color, PlacedBrick};
 use crate::BaseError::{NotAOneByOneBrick, NotAPlate, NotATwoByOneBrick, NotATwoByTwoBrick};
 
@@ -394,7 +395,12 @@ impl<B: Brick> FilledArea<B> {
         let needs_right_border = is_even(mosaic_length) && is_rightmost_area;
         let needs_bottom_border = is_even(mosaic_width) && is_bottommost_area;
 
-        let border_bricks = vec![two_by_one, two_by_one.rotate_90(), one_by_one];
+        let mut border_bricks = vec![two_by_one, two_by_one.rotate_90(), one_by_one];
+        border_bricks.extend(
+            other_bricks.iter()
+                .filter(|brick| brick.length() == 1 || brick.width() == 1)
+                .flat_map(|&brick| iter::once(brick).chain(iter::once(brick.rotate_90())))
+        );
         if needs_left_border {
             let mut left_border = fill(
                 self.l,
