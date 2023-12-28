@@ -5,6 +5,7 @@ use crate::BaseError::{NotAOneByOneBrick, NotAPlate, NotATwoByOneBrick, NotATwoB
 // PUBLIC STRUCTS
 // ====================
 
+#[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum BaseError<B> {
     NotAOneByOneBrick(B),

@@ -111,6 +111,7 @@ impl Srgba<u8> {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum MosaicError<B> {
     NotUnitBrick(B),
