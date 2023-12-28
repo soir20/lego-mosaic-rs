@@ -2,7 +2,8 @@ use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use nalgebra_glm::{rotate_y, TMat4};
-use crate::{Brick, Color, Mosaic, Srgba};
+use crate::{Brick, Color, Mosaic, PlacedBrick, Srgba};
+use crate::base::Base;
 
 const BASE_TRANSFORM: TMat4<f64> = TMat4::new(
     1f64, 0f64, 0f64, 0f64,
@@ -175,13 +176,13 @@ impl<'a> LdrawBrick<'a> {
     }
 
     pub fn command(&self, l: u32, w: u32, h: u32, color: LdrawColor, file: &'a str,
-                   mosaic: &Mosaic<LdrawBrick, LdrawColor>) -> SubPartCommand {
+                   mosaic_width: u32) -> SubPartCommand {
         let ldraw_horizontal_scale = 20f64;
         let ldraw_vertical_scale = 8f64;
 
         let x = (l as f64 + self.length as f64 / 2f64) * ldraw_horizontal_scale;
         let y = -(self.height as f64 + h as f64) * ldraw_vertical_scale;
-        let z = (mosaic.width() as f64 - w as f64 - self.width as f64 / 2f64) * ldraw_horizontal_scale;
+        let z = (mosaic_width as f64 - w as f64 - self.width as f64 / 2f64) * ldraw_horizontal_scale;
 
         // Use x=0, y=0, z=0 to rotate about part's origin
         let transform = match self.rotated {
@@ -312,18 +313,18 @@ impl From<LdrawColor> for Srgba<u8> {
 
 impl Color for LdrawColor {}
 
-pub fn write_mosaic(buffer: &mut impl Write, mosaic: &Mosaic<LdrawBrick, LdrawColor>,
-                    mut id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
+fn write<'a>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<LdrawBrick<'a>, LdrawColor>>,
+             mut id_fn: impl FnMut(LdrawBrick) -> &str, mosaic_width: u32) -> std::io::Result<usize> {
     let mut bytes = 0;
 
-    for placement in mosaic.iter() {
+    for placement in bricks {
         let command = placement.brick.command(
             placement.l,
             placement.w,
             placement.h,
             placement.color,
             id_fn(placement.brick),
-            mosaic
+            mosaic_width
         );
 
         let cmd_str = command.to_string();
@@ -333,6 +334,16 @@ pub fn write_mosaic(buffer: &mut impl Write, mosaic: &Mosaic<LdrawBrick, LdrawCo
     }
 
     Ok(bytes)
+}
+
+pub fn write_mosaic(buffer: &mut impl Write, mosaic: &Mosaic<LdrawBrick, LdrawColor>,
+                    id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
+    write(buffer, mosaic.iter(), id_fn, mosaic.width())
+}
+
+pub fn write_base(buffer: &mut impl Write, base: &Base<LdrawBrick, LdrawColor>,
+                    id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
+    write(buffer, base.iter(), id_fn, base.width())
 }
 
 pub const BLACK: LdrawColor = LdrawColor::new(0, 27, 42, 52, 255);

@@ -1,3 +1,5 @@
+pub mod base;
+
 #[cfg(feature = "palette")]
 pub mod palette;
 
@@ -7,6 +9,7 @@ pub mod image;
 #[cfg(feature = "ldraw")]
 pub mod ldraw;
 
+pub use base::*;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::hash::Hash;
@@ -109,7 +112,7 @@ impl Srgba<u8> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Error<B> {
+pub enum MosaicError<B> {
     NotUnitBrick(B),
     PointerTooSmall
 }
@@ -155,7 +158,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
     pub fn from_image<I: Image>(image: &I,
                                 palette: &impl Palette<C>,
                                 mut height_fn: impl FnMut(u32, u32, C) -> u32,
-                                mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, Error<B>> {
+                                mut brick_fn: impl FnMut(u32, u32, u32, C) -> B) -> Result<Self, MosaicError<B>> {
         let section_size = u8::MAX as u32;
         let section_images = Mosaic::<B, C>::make_sections::<I>(image, section_size);
         let mut sections = Vec::with_capacity(section_images.len());
@@ -217,7 +220,7 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
         Ok(Mosaic::new(sections, image.length(), image.width()))
     }
 
-    pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, Error<B>> {
+    pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, MosaicError<B>> {
         let bricks_by_type: HashMap<B, Vec<VolumeSortedBrick<B>>> = bricks.iter()
             .fold(Ok(HashMap::new()), |partitions_result, &brick| {
                 if let Ok(mut partitions) = partitions_result {
@@ -331,9 +334,9 @@ impl<B: Brick, C: Color> Mosaic<B, C> {
                     max_height: u8,
                     mut height_fn: impl FnMut(u8, u8) -> u8,
                     mut brick_fn: impl FnMut(u8, u8, u8, C) -> B,
-                    color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<B, C>>, Error<B>> {
+                    color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<B, C>>, MosaicError<B>> {
         if usize::MAX / length as usize / width as usize / max_height as usize == 0 {
-            return Err(Error::PointerTooSmall);
+            return Err(MosaicError::PointerTooSmall);
         }
 
         let mut visited = BoolVec::filled_with(length as usize * width as usize * max_height as usize, false);
@@ -540,10 +543,10 @@ fn is_new_pos<B: Brick, C: Color>(visited: &BoolVec,
     !was_visited(visited, l, w, h, length, width) && brick_fn(l, w, h, start_color) == start_brick && color_fn(l, w) == start_color
 }
 
-fn assert_unit_brick<B: Brick>(brick: B) -> Result<B, Error<B>> {
+fn assert_unit_brick<B: Brick>(brick: B) -> Result<B, MosaicError<B>> {
     match brick.length() == 1 && brick.width() == 1 && brick.height() == 1 {
         true => Ok(brick),
-        false => Err(Error::NotUnitBrick(brick))
+        false => Err(MosaicError::NotUnitBrick(brick))
     }
 }
 
@@ -777,7 +780,7 @@ impl Pixels<RawColor> {
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::palette::EuclideanDistancePalette;
+    use crate::palette::{EuclideanDistancePalette};
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1225,7 +1228,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         assert_eq!(
-            Error::NotUnitBrick(LENGTH_TWO_UNIT_BRICK),
+            MosaicError::NotUnitBrick(LENGTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
                 &palette,
@@ -1240,7 +1243,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         assert_eq!(
-            Error::NotUnitBrick(WIDTH_TWO_UNIT_BRICK),
+            MosaicError::NotUnitBrick(WIDTH_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
                 &palette,
@@ -1255,7 +1258,7 @@ mod tests {
         let (img, palette) = make_test_img();
 
         assert_eq!(
-            Error::NotUnitBrick(HEIGHT_TWO_UNIT_BRICK),
+            MosaicError::NotUnitBrick(HEIGHT_TWO_UNIT_BRICK),
             Mosaic::from_image(
                 &img,
                 &palette,
