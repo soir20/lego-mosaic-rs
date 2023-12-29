@@ -1,16 +1,22 @@
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
-use nalgebra_glm::{rotate_y, TMat4};
 use crate::{Brick, Color, Mosaic, PlacedBrick, Srgba};
 use crate::base::Base;
 
-const BASE_TRANSFORM: TMat4<f64> = TMat4::new(
-    1f64, 0f64, 0f64, 0f64,
-    0f64, 1f64, 0f64, 0f64,
-    0f64, 0f64, 1f64, 0f64,
-    0f64, 0f64, 0f64, 1f64
-);
+const BASE_TRANSFORM: [[f64; 4]; 4] = [
+    [1f64, 0f64, 0f64, 0f64],
+    [0f64, 1f64, 0f64, 0f64],
+    [0f64, 0f64, 1f64, 0f64],
+    [0f64, 0f64, 0f64, 1f64]
+];
+
+const ROTATED_TRANSFORM: [[f64; 4]; 4] = [
+    [0f64, 0f64, 1f64, 0f64],
+    [0f64, 1f64, 0f64, 0f64],
+    [-1f64, 0f64, 0f64, 0f64],
+    [0f64, 0f64, 0f64, 1f64]
+];
 
 pub struct SubPartCommand<'a> {
     color: u16,
@@ -186,21 +192,21 @@ impl<'a> LdrawBrick<'a> {
 
         // Use x=0, y=0, z=0 to rotate about part's origin
         let transform = match self.rotated {
-            true => rotate_y(&BASE_TRANSFORM, f64::to_radians(90f64)),
+            true => ROTATED_TRANSFORM,
             false => BASE_TRANSFORM
         };
 
-        let a = transform.m11;
-        let b = transform.m21;
-        let c = transform.m31;
+        let a = transform[0][0];
+        let b = transform[1][0];
+        let c = transform[2][0];
 
-        let d = transform.m12;
-        let e = transform.m22;
-        let f = transform.m32;
+        let d = transform[0][1];
+        let e = transform[1][1];
+        let f = transform[2][1];
 
-        let g = transform.m13;
-        let h = transform.m23;
-        let i = transform.m33;
+        let g = transform[0][2];
+        let h = transform[1][2];
+        let i = transform[2][2];
 
         SubPartCommand {
             color: color.id,
