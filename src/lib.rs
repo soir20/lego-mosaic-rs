@@ -1,5 +1,3 @@
-pub mod base;
-
 #[cfg(feature = "palette")]
 pub mod palette;
 
@@ -8,6 +6,8 @@ pub mod image;
 
 #[cfg(feature = "ldraw")]
 pub mod ldraw;
+
+mod base;
 
 pub use base::*;
 use std::cmp::Ordering;
@@ -781,7 +781,7 @@ impl Pixels<RawColor> {
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::palette::{EuclideanDistancePalette};
+    use crate::palette::EuclideanDistancePalette;
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
