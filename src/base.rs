@@ -123,9 +123,15 @@ impl<B: Brick, C: Color> Base<B, C> {
             });
         }
 
-        let support_bricks = base_bricks.iter()
-            .flat_map(|base| base.build_supports(one_by_one, two_by_one, two_by_two, other_bricks, length, width).into_iter())
-            .collect();
+        let support_bricks = Base::<B, C>::build_supports(
+            &base_bricks,
+            one_by_one,
+            two_by_one,
+            two_by_two,
+            other_bricks,
+            length,
+            width
+        );
 
         Ok(Base {
             base_bricks,
@@ -150,6 +156,55 @@ impl<B: Brick, C: Color> Base<B, C> {
 
     pub fn height(&self) -> u32 {
         2
+    }
+
+    fn build_supports(base_bricks: &Vec<FilledArea<B>>, one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B],
+                      mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<B>> {
+        let mut bricks = vec![one_by_one, two_by_one, two_by_one.rotate_90(), two_by_two];
+        bricks.extend_from_slice(other_bricks);
+
+        // Return the same single brick used for 2x2 and smaller bases
+        if mosaic_length < 3 && mosaic_width < 3 {
+            return base_bricks.clone();
+        } else if mosaic_length == 3 && mosaic_width == 2 {
+            return vec![
+                FilledArea {
+                    brick: two_by_one.rotate_90(),
+                    l: 0,
+                    w: 0,
+                    length: 1,
+                    width: 2
+                },
+                FilledArea {
+                    brick: two_by_two,
+                    l: 1,
+                    w: 0,
+                    length: 2,
+                    width: 2
+                }
+            ];
+        } else if mosaic_length == 2 && mosaic_width == 3 {
+            return vec![
+                FilledArea {
+                    brick: two_by_one,
+                    l: 0,
+                    w: 0,
+                    length: 2,
+                    width: 1
+                },
+                FilledArea {
+                    brick: two_by_two,
+                    l: 0,
+                    w: 1,
+                    length: 2,
+                    width: 2
+                }
+            ];
+        }
+
+        base_bricks.iter()
+            .flat_map(|base| base.build_supports(other_bricks, mosaic_length, mosaic_width).into_iter())
+            .collect()
     }
 
     fn layer_iter<'a>(&'a self, bricks: &'a Vec<FilledArea<B>>, h: u32) -> impl Iterator<Item=PlacedBrick<B, C>> + '_ {
@@ -271,53 +326,8 @@ struct FilledArea<B> {
 }
 
 impl<B: Brick> FilledArea<B> {
-    fn build_supports(&self, one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<B>> {
-
-        // Main algorithm works for bases of size 3x3 or larger
-        if mosaic_length < 3 && mosaic_width < 3 {
-            return vec![self.clone()];
-        } else if mosaic_length == 3 && mosaic_width == 2 {
-            return vec![
-                FilledArea {
-                    brick: two_by_one.rotate_90(),
-                    l: 0,
-                    w: 0,
-                    length: 1,
-                    width: 2
-                },
-                FilledArea {
-                    brick: two_by_two,
-                    l: 1,
-                    w: 0,
-                    length: 2,
-                    width: 2
-                }
-            ];
-        } else if mosaic_length == 2 && mosaic_width == 3 {
-            return vec![
-                FilledArea {
-                    brick: two_by_one,
-                    l: 0,
-                    w: 0,
-                    length: 2,
-                    width: 1
-                },
-                FilledArea {
-                    brick: two_by_two,
-                    l: 0,
-                    w: 1,
-                    length: 2,
-                    width: 2
-                }
-            ];
-        }
-
-        let (length_two_bricks, width_two_bricks) = FilledArea::<B>::filter_bricks(
-            one_by_one,
-            two_by_one,
-            two_by_two,
-            other_bricks
-        );
+    fn build_supports(&self, bricks: &[B], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<B>> {
+        let (length_two_bricks, width_two_bricks) = FilledArea::<B>::filter_bricks(bricks);
 
         let is_leftmost_area = self.l == 0;
         let is_topmost_area = self.w == 0;
@@ -395,12 +405,10 @@ impl<B: Brick> FilledArea<B> {
         let needs_right_border = is_even(mosaic_length) && is_rightmost_area;
         let needs_bottom_border = is_even(mosaic_width) && is_bottommost_area;
 
-        let mut border_bricks = vec![two_by_one, two_by_one.rotate_90(), one_by_one];
-        border_bricks.extend(
-            other_bricks.iter()
-                .filter(|brick| brick.length() == 1 || brick.width() == 1)
-                .flat_map(|&brick| iter::once(brick).chain(iter::once(brick.rotate_90())))
-        );
+        let border_bricks: Vec<B> = bricks.iter()
+            .filter(|brick| brick.length() == 1 || brick.width() == 1)
+            .flat_map(|&brick| iter::once(brick).chain(iter::once(brick.rotate_90())))
+            .collect();
         if needs_left_border {
             let mut left_border = fill(
                 self.l,
@@ -484,14 +492,11 @@ impl<B: Brick> FilledArea<B> {
         supports
     }
 
-    fn filter_bricks(one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B]) -> (Vec<B>, Vec<B>) {
-        let mut bricks = vec![one_by_one, two_by_one, two_by_one.rotate_90(), two_by_two];
-        bricks.extend_from_slice(other_bricks);
-
+    fn filter_bricks(bricks: &[B]) -> (Vec<B>, Vec<B>) {
         let mut length_two_bricks = Vec::new();
         let mut width_two_bricks = Vec::new();
 
-        for brick in bricks {
+        for &brick in bricks {
             if brick.length() == 2 && is_even(brick.width() as u32) {
                 length_two_bricks.push(brick);
                 width_two_bricks.push(brick.rotate_90());
@@ -505,5 +510,167 @@ impl<B: Brick> FilledArea<B> {
         sort_by_area(&mut width_two_bricks);
 
         (length_two_bricks, width_two_bricks)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use crate::{Base, Brick};
+    use crate::tests::{TestBrick, TestColor, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
+
+    fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
+                                                         expected_connections: &[&[(u32, u32)]],
+                                                         expected_counts: [[u32; L]; W]) {
+        let mut actual_counts = [[0; L]; W];
+        let mut missing_connections: Vec<BTreeSet<(u32, u32)>> = Vec::new();
+        for connection in expected_connections {
+            let mut missing_connection = BTreeSet::new();
+            for &point in connection.iter() {
+                missing_connection.insert(point);
+            }
+            missing_connections.push(missing_connection);
+        }
+
+        // Process all bricks in the base
+        for placed_brick in base.iter() {
+            let mut connection = BTreeSet::new();
+
+            for l in placed_brick.l..(placed_brick.l + placed_brick.brick.length() as u32) {
+                for w in placed_brick.w..(placed_brick.w + placed_brick.brick.width() as u32) {
+                    if placed_brick.h == 0 {
+                        connection.insert((l, w));
+                    }
+
+                    for _ in placed_brick.h..(placed_brick.h + placed_brick.brick.height() as u32) {
+                        actual_counts[w as usize][l as usize] += 1;
+                    }
+                }
+            }
+
+            // Remove matching connections
+            for index in 0..missing_connections.len() {
+
+                if missing_connections[index].is_subset(&connection) {
+                    missing_connections.remove(index);
+
+                    // Each position can only be connected once
+                    break;
+
+                }
+            }
+
+        }
+
+        assert_eq!(L as u32, base.length());
+        assert_eq!(W as u32, base.width());
+        assert_eq!(2, base.height());
+        assert!(missing_connections.is_empty());
+        assert_eq!(actual_counts, expected_counts);
+    }
+
+    #[test]
+    fn test_empty_base() {
+        let base = Base::new(
+            0,
+            0,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<0, 0>(&base, &[], []);
+    }
+
+    #[test]
+    fn test_one_by_one_base() {
+        let base = Base::new(
+            1,
+            1,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<1, 1>(&base, &[&[(0, 0)]], [[2]]);
+    }
+
+    #[test]
+    fn test_two_by_one_base() {
+        let base = Base::new(
+            2,
+            1,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<2, 1>(&base, &[&[(0, 0), (1, 0)]], [[2, 2]]);
+    }
+
+    #[test]
+    fn test_one_by_two_base() {
+        let base = Base::new(
+            1,
+            2,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<1, 2>(&base, &[&[(0, 0), (0, 1)]], [[2], [2]]);
+    }
+
+    #[test]
+    fn test_two_by_two_base() {
+        let base = Base::new(
+            2,
+            2,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<2, 2>(&base, &[&[(0, 0), (0, 1), (1, 0), (1, 1)]], [[2, 2], [2, 2]]);
+    }
+
+    #[test]
+    fn test_three_by_two_base() {
+        let base = Base::new(
+            3,
+            2,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<3, 2>(&base, &[&[(1, 0), (1, 1), (2, 0), (2, 1)]], [[2, 2, 2], [2, 2, 2]]);
+    }
+
+    #[test]
+    fn test_two_by_three_base() {
+        let base = Base::new(
+            2,
+            3,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<2, 3>(&base, &[&[(0, 1), (1, 1), (0, 2), (1, 2)]], [[2, 2], [2, 2], [2, 2]]);
     }
 }

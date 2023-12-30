@@ -781,17 +781,17 @@ impl Pixels<RawColor> {
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::palette::EuclideanDistancePalette;
+    use crate::palette::{EuclideanDistancePalette};
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct TestBrick<'a> {
-        id: &'a str,
-        rotation_count: u8,
-        length: u8,
-        width: u8,
-        height: u8,
-        unit_brick: Option<&'a TestBrick<'a>>
+    pub(crate) struct TestBrick<'a> {
+        pub(crate) id: &'a str,
+        pub(crate) rotation_count: u8,
+        pub(crate) length: u8,
+        pub(crate) width: u8,
+        pub(crate) height: u8,
+        pub(crate) unit_brick: Option<&'a TestBrick<'a>>
     }
 
     impl Hash for TestBrick<'_> {
@@ -833,7 +833,7 @@ mod tests {
         }
     }
 
-    const UNIT_BRICK: TestBrick = TestBrick {
+    pub(crate) const UNIT_BRICK: TestBrick = TestBrick {
         id: "1x1x1",
         rotation_count: 0,
         length: 1,
@@ -842,7 +842,7 @@ mod tests {
         unit_brick: None,
     };
 
-    const UNIT_BRICK_2: TestBrick = TestBrick {
+    pub(crate) const UNIT_BRICK_2: TestBrick = TestBrick {
         id: "1x1x1_2",
         rotation_count: 0,
         length: 1,
@@ -851,8 +851,35 @@ mod tests {
         unit_brick: None,
     };
 
-    const LENGTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
+    pub(crate) const TWO_BY_ONE_PLATE: TestBrick = TestBrick {
         id: "2x1x1",
+        rotation_count: 0,
+        length: 2,
+        width: 1,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const ONE_BY_TWO_PLATE: TestBrick = TestBrick {
+        id: "1x2x1",
+        rotation_count: 0,
+        length: 1,
+        width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const TWO_BY_TWO_PLATE: TestBrick = TestBrick {
+        id: "2x2x1",
+        rotation_count: 0,
+        length: 2,
+        width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const LENGTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
+        id: "2x1x1_unit",
         rotation_count: 0,
         length: 2,
         width: 1,
@@ -860,8 +887,8 @@ mod tests {
         unit_brick: None,
     };
 
-    const WIDTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
-        id: "1x2x1",
+    pub(crate) const WIDTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
+        id: "1x2x1_unit",
         rotation_count: 0,
         length: 1,
         width: 2,
@@ -869,7 +896,7 @@ mod tests {
         unit_brick: None,
     };
 
-    const HEIGHT_TWO_UNIT_BRICK: TestBrick = TestBrick {
+    pub(crate) const HEIGHT_TWO_UNIT_BRICK: TestBrick = TestBrick {
         id: "2x1x1",
         rotation_count: 0,
         length: 1,
@@ -879,12 +906,12 @@ mod tests {
     };
 
     #[derive(Copy, Clone, Debug, Eq)]
-    pub struct TestColor {
+    pub(crate) struct TestColor {
         value: Srgba<u8>
     }
 
     impl TestColor {
-        pub const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+        pub(crate) const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
             TestColor { value: Srgba::new(red, green, blue, alpha), }
         }
     }
