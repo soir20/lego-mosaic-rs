@@ -203,7 +203,7 @@ impl<B: Brick, C: Color> Base<B, C> {
         }
 
         base_bricks.iter()
-            .flat_map(|base| base.build_supports(other_bricks, mosaic_length, mosaic_width).into_iter())
+            .flat_map(|base| base.build_supports(&bricks, mosaic_length, mosaic_width).into_iter())
             .collect()
     }
 
