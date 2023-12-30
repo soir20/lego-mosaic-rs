@@ -673,4 +673,28 @@ mod tests {
 
         assert_valid_base::<2, 3>(&base, &[&[(0, 1), (1, 1), (0, 2), (1, 2)]], [[2, 2], [2, 2], [2, 2]]);
     }
+
+    #[test]
+    fn test_three_by_three_base() {
+        let base = Base::new(
+            3,
+            3,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<3, 3>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)]
+            ],
+            [
+                [2, 2, 2],
+                [2, 2, 2],
+                [2, 2, 2]
+            ]
+        );
+    }
 }
