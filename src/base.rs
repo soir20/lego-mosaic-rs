@@ -347,25 +347,27 @@ impl<B: Brick> FilledArea<B> {
 
         let min_l = self.l + brick_length - 1;
         let min_w = self.w + brick_width - 1;
-        let mut max_l = self.l + self.length - 1;
-        if is_rightmost_area {
-            max_l = sub_at_most(max_l, 2);
-        }
+        let max_l = self.l + self.length - 1;
         let max_w = self.w + sub_at_most(support_width, 1);
 
         let mut supports = Vec::new();
 
         for l in (min_l..=max_l).step_by(brick_length as usize) {
 
-            let mut vertical_supports = fill(
-                l,
-                self.w + 1,
-                2,
-                support_width,
-                0,
-                &length_two_bricks
-            );
-            supports.append(&mut vertical_supports);
+            /* If this area is the rightmost, it will not connect to any area to its right,
+               so skip the vertical support to prevent it from sticking outside the base's bounds
+               and leave room for the border. */
+            if !is_rightmost_area || max_l - l >= 2 {
+                let mut vertical_supports = fill(
+                    l,
+                    self.w + 1,
+                    2,
+                    support_width,
+                    0,
+                    &length_two_bricks
+                );
+                supports.append(&mut vertical_supports);
+            }
 
             /* Add horizontal supports between vertical supports without overlap.
                If the brick length is 2 or less, there will be no space between
