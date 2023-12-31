@@ -887,6 +887,15 @@ mod tests {
         unit_brick: Some(&UNIT_BRICK),
     };
 
+    pub(crate) const EIGHT_BY_EIGHT_PLATE: TestBrick = TestBrick {
+        id: "8x8x1",
+        rotation_count: 0,
+        length: 8,
+        width: 8,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
     pub(crate) const LENGTH_TWO_UNIT_BRICK: TestBrick = TestBrick {
         id: "2x1x1_unit",
         rotation_count: 0,
