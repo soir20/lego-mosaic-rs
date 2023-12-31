@@ -781,7 +781,7 @@ impl Pixels<RawColor> {
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use std::hash::Hasher;
-    use crate::palette::{EuclideanDistancePalette};
+    use crate::palette::EuclideanDistancePalette;
     use super::*;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -874,6 +874,15 @@ mod tests {
         rotation_count: 0,
         length: 2,
         width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const FOUR_BY_FOUR_PLATE: TestBrick = TestBrick {
+        id: "4x4x1",
+        rotation_count: 0,
+        length: 4,
+        width: 4,
         height: 1,
         unit_brick: Some(&UNIT_BRICK),
     };

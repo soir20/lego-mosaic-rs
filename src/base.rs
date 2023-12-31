@@ -517,7 +517,7 @@ impl<B: Brick> FilledArea<B> {
 mod tests {
     use std::collections::BTreeSet;
     use crate::{Base, Brick};
-    use crate::tests::{TestBrick, TestColor, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
+    use crate::tests::{FOUR_BY_FOUR_PLATE, TestBrick, TestColor, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
 
     fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
@@ -694,6 +694,103 @@ mod tests {
                 [2, 2, 2],
                 [2, 2, 2],
                 [2, 2, 2]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_four_by_three_base() {
+        let base = Base::new(
+            4,
+            3,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<4, 3>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)]
+            ],
+            [
+                [2, 2, 2, 2],
+                [2, 2, 2, 2],
+                [2, 2, 2, 2]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_three_by_four_base() {
+        let base = Base::new(
+            3,
+            4,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<3, 4>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)]
+            ],
+            [
+                [2, 2, 2],
+                [2, 2, 2],
+                [2, 2, 2],
+                [2, 2, 2]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_four_by_four_base() {
+        let base = Base::new(
+            4,
+            4,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[]
+        ).unwrap();
+
+        assert_valid_base::<4, 4>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)]
+            ],
+            [
+                [2, 2, 2, 2],
+                [2, 2, 2, 2],
+                [2, 2, 2, 2],
+                [2, 2, 2, 2]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_four_by_four_base_with_four_by_four_plate() {
+        let base = Base::new(
+            4,
+            4,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[FOUR_BY_FOUR_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<4, 4>(
+            &base, &[],
+            [
+                [2, 2, 2, 2],
+                [2, 1, 1, 2],
+                [2, 1, 1, 2],
+                [2, 2, 2, 2]
             ]
         );
     }
