@@ -878,11 +878,47 @@ mod tests {
         unit_brick: Some(&UNIT_BRICK),
     };
 
+    pub(crate) const THREE_BY_ONE_PLATE: TestBrick = TestBrick {
+        id: "3x1x1",
+        rotation_count: 0,
+        length: 3,
+        width: 1,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const THREE_BY_TWO_PLATE: TestBrick = TestBrick {
+        id: "3x2x1",
+        rotation_count: 0,
+        length: 3,
+        width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
     pub(crate) const THREE_BY_THREE_PLATE: TestBrick = TestBrick {
         id: "3x3x1",
         rotation_count: 0,
         length: 3,
         width: 3,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const FOUR_BY_TWO_PLATE: TestBrick = TestBrick {
+        id: "4x2x1",
+        rotation_count: 0,
+        length: 4,
+        width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const FOUR_BY_THREE_PLATE: TestBrick = TestBrick {
+        id: "4x2x1",
+        rotation_count: 0,
+        length: 4,
+        width: 2,
         height: 1,
         unit_brick: Some(&UNIT_BRICK),
     };
