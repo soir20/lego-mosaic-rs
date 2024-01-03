@@ -915,10 +915,10 @@ mod tests {
     };
 
     pub(crate) const FOUR_BY_THREE_PLATE: TestBrick = TestBrick {
-        id: "4x2x1",
+        id: "4x3x1",
         rotation_count: 0,
         length: 4,
-        width: 2,
+        width: 3,
         height: 1,
         unit_brick: Some(&UNIT_BRICK),
     };

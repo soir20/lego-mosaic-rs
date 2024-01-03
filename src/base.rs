@@ -520,7 +520,7 @@ impl<B: Brick> FilledArea<B> {
 mod tests {
     use std::collections::BTreeSet;
     use crate::{Base, Brick};
-    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
+    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
 
     fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
@@ -1571,6 +1571,173 @@ mod tests {
             TWO_BY_ONE_PLATE,
             TWO_BY_TWO_PLATE,
             &[THREE_BY_TWO_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<9, 9>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)],
+                &[(3, 1), (3, 2), (4, 1), (4, 2)],
+                &[(5, 1), (5, 2), (6, 1), (6, 2)],
+                &[(7, 1), (7, 2), (8, 1), (8, 2)],
+                &[(1, 3), (1, 4), (2, 3), (2, 4)],
+                &[(3, 3), (3, 4), (4, 3), (4, 4)],
+                &[(5, 3), (5, 4), (6, 3), (6, 4)],
+                &[(7, 3), (7, 4), (8, 3), (8, 4)],
+                &[(1, 5), (1, 6), (2, 5), (2, 6)],
+                &[(3, 5), (3, 6), (4, 5), (4, 6)],
+                &[(5, 5), (5, 6), (6, 5), (6, 6)],
+                &[(7, 5), (7, 6), (8, 5), (8, 6)],
+                &[(1, 7), (1, 8), (2, 7), (2, 8)],
+                &[(3, 7), (3, 8), (4, 7), (4, 8)],
+                &[(5, 7), (5, 8), (6, 7), (6, 8)],
+                &[(7, 7), (7, 8), (8, 7), (8, 8)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_eight_by_eight_base_with_four_by_three_plate() {
+        let base = Base::new(
+            8,
+            8,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[FOUR_BY_THREE_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<8, 8>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)],
+                &[(3, 1), (3, 2), (4, 1), (4, 2)],
+                &[(5, 1), (5, 2), (6, 1), (6, 2)],
+                &[(1, 3), (1, 4), (2, 3), (2, 4)],
+                &[(3, 3), (3, 4), (4, 3), (4, 4)],
+                &[(5, 3), (5, 4), (6, 3), (6, 4)],
+                &[(1, 5), (1, 6), (2, 5), (2, 6)],
+                &[(3, 5), (3, 6), (4, 5), (4, 6)],
+                &[(5, 5), (5, 6), (6, 5), (6, 6)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_nine_by_eight_base_with_four_by_three_plate() {
+        let base = Base::new(
+            9,
+            8,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[FOUR_BY_THREE_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<9, 8>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)],
+                &[(3, 1), (3, 2), (4, 1), (4, 2)],
+                &[(5, 1), (5, 2), (6, 1), (6, 2)],
+                &[(7, 1), (7, 2), (8, 1), (8, 2)],
+                &[(1, 3), (1, 4), (2, 3), (2, 4)],
+                &[(3, 3), (3, 4), (4, 3), (4, 4)],
+                &[(5, 3), (5, 4), (6, 3), (6, 4)],
+                &[(7, 3), (7, 4), (8, 3), (8, 4)],
+                &[(1, 5), (1, 6), (2, 5), (2, 6)],
+                &[(3, 5), (3, 6), (4, 5), (4, 6)],
+                &[(5, 5), (5, 6), (6, 5), (6, 6)],
+                &[(7, 5), (7, 6), (8, 5), (8, 6)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_eight_by_nine_base_with_four_by_three_plate() {
+        let base = Base::new(
+            8,
+            9,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[FOUR_BY_THREE_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<8, 9>(
+            &base, &[
+                &[(1, 1), (1, 2), (2, 1), (2, 2)],
+                &[(3, 1), (3, 2), (4, 1), (4, 2)],
+                &[(5, 1), (5, 2), (6, 1), (6, 2)],
+                &[(1, 3), (1, 4), (2, 3), (2, 4)],
+                &[(3, 3), (3, 4), (4, 3), (4, 4)],
+                &[(5, 3), (5, 4), (6, 3), (6, 4)],
+                &[(1, 5), (1, 6), (2, 5), (2, 6)],
+                &[(3, 5), (3, 6), (4, 5), (4, 6)],
+                &[(5, 5), (5, 6), (6, 5), (6, 6)],
+                &[(1, 7), (1, 8), (2, 7), (2, 8)],
+                &[(3, 7), (3, 8), (4, 7), (4, 8)],
+                &[(5, 7), (5, 8), (6, 7), (6, 8)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_nine_by_nine_base_with_four_by_three_plate() {
+        let base = Base::new(
+            9,
+            9,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[FOUR_BY_THREE_PLATE]
         ).unwrap();
 
         assert_valid_base::<9, 9>(
