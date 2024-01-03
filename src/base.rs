@@ -15,6 +15,7 @@ pub enum BaseError<B> {
     NotAPlate(B)
 }
 
+#[derive(Debug)]
 pub struct Base<B, C> {
     base_bricks: Vec<FilledArea<B>>,
     support_bricks: Vec<FilledArea<B>>,
@@ -316,7 +317,7 @@ fn fill<B: Brick>(min_l: u32, min_w: u32, length: u32, width: u32, min_index: us
 // PRIVATE STRUCTS
 // ====================
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct FilledArea<B> {
     brick: B,
     l: u32,
@@ -519,8 +520,8 @@ impl<B: Brick> FilledArea<B> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use crate::{Base, Brick};
-    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
+    use crate::{Base, BaseError, Brick};
+    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
 
     fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
@@ -1962,6 +1963,7 @@ mod tests {
         );
     }
 
+    //noinspection DuplicatedCode
     #[test]
     fn test_seventeen_by_nineteen_base_with_eight_by_eight_plate() {
         let base = Base::new(
@@ -2033,5 +2035,127 @@ mod tests {
                 [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
             ]
         );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_one_by_two_plate() {
+        let base = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            ONE_BY_TWO_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<17, 19>(
+            &base, &[
+                &[(7, 1), (8, 1), (7, 2), (8, 2)],
+                &[(7, 3), (8, 3), (7, 4), (8, 4)],
+                &[(7, 5), (8, 5), (7, 6), (8, 6)],
+                &[(7, 7), (8, 7), (7, 8), (8, 8)],
+                &[(7, 9), (8, 9), (7, 10), (8, 10)],
+                &[(7, 11), (8, 11), (7, 12), (8, 12)],
+                &[(7, 13), (8, 13), (7, 14), (8, 14)],
+                &[(7, 15), (8, 15), (7, 16), (8, 16)],
+                &[(1, 7), (2, 7), (1, 8), (2, 8)],
+                &[(3, 7), (4, 7), (3, 8), (4, 8)],
+                &[(5, 7), (6, 7), (5, 8), (6, 8)],
+                &[(9, 7), (10, 7), (9, 8), (10, 8)],
+                &[(11, 7), (12, 7), (11, 8), (12, 8)],
+                &[(13, 7), (14, 7), (13, 8), (14, 8)],
+                &[(1, 15), (2, 15), (1, 16), (2, 16)],
+                &[(3, 15), (4, 15), (3, 16), (4, 16)],
+                &[(5, 15), (6, 15), (5, 16), (6, 16)],
+                &[(9, 15), (10, 15), (9, 16), (10, 16)],
+                &[(11, 15), (12, 15), (11, 16), (12, 16)],
+                &[(13, 15), (14, 15), (13, 16), (14, 16)],
+                &[(15, 1), (16, 1), (15, 2), (16, 2)],
+                &[(15, 3), (16, 3), (15, 4), (16, 4)],
+                &[(15, 5), (16, 5), (15, 6), (16, 6)],
+                &[(15, 7), (16, 7), (15, 8), (16, 8)],
+                &[(15, 9), (16, 9), (15, 10), (16, 10)],
+                &[(15, 11), (16, 11), (15, 12), (16, 12)],
+                &[(15, 13), (16, 13), (15, 14), (16, 14)],
+                &[(15, 15), (16, 15), (15, 16), (16, 16)],
+                &[(1, 17), (2, 17), (1, 18), (2, 18)],
+                &[(3, 17), (4, 17), (3, 18), (4, 18)],
+                &[(5, 17), (6, 17), (5, 18), (6, 18)],
+                &[(9, 17), (10, 17), (9, 18), (10, 18)],
+                &[(11, 17), (12, 17), (11, 18), (12, 18)],
+                &[(13, 17), (14, 17), (13, 18), (14, 18)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_length_unit_brick() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            TWO_BY_ONE_PLATE,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotAOneByOneBrick(TWO_BY_ONE_PLATE), error);
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_width_unit_brick() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            ONE_BY_TWO_PLATE,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotAOneByOneBrick(ONE_BY_TWO_PLATE), error);
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_height_unit_brick() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            HEIGHT_TWO_UNIT_BRICK,
+            TWO_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotAPlate(HEIGHT_TWO_UNIT_BRICK), error);
     }
 }
