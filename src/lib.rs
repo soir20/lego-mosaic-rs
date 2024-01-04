@@ -995,6 +995,15 @@ mod tests {
         unit_brick: Some(&UNIT_BRICK),
     };
 
+    pub(crate) const ZERO_BY_TWO_PLATE: TestBrick = TestBrick {
+        id: "0x2x1",
+        rotation_count: 0,
+        length: 0,
+        width: 2,
+        height: 1,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
     #[derive(Copy, Clone, Debug, Eq)]
     pub(crate) struct TestColor {
         value: Srgba<u8>

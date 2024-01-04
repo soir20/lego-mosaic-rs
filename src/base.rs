@@ -1,6 +1,6 @@
 use std::iter;
 use crate::{Brick, Color, PlacedBrick};
-use crate::BaseError::{NotAOneByOneBrick, NotAPlate, NotATwoByOneBrick, NotATwoByTwoBrick};
+use crate::BaseError::{NotAOneByOnePlate, NotATwoByOnePlate, NotATwoByTwoPlate};
 
 // ====================
 // PUBLIC STRUCTS
@@ -9,10 +9,9 @@ use crate::BaseError::{NotAOneByOneBrick, NotAPlate, NotATwoByOneBrick, NotATwoB
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum BaseError<B> {
-    NotAOneByOneBrick(B),
-    NotATwoByOneBrick(B),
-    NotATwoByTwoBrick(B),
-    NotAPlate(B)
+    NotAOneByOnePlate(B),
+    NotATwoByOnePlate(B),
+    NotATwoByTwoPlate(B)
 }
 
 #[derive(Debug)]
@@ -27,35 +26,32 @@ pub struct Base<B, C> {
 impl<B: Brick, C: Color> Base<B, C> {
 
     pub fn new(length: u32, width: u32, color: C, one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B]) -> Result<Base<B, C>, BaseError<B>> {
-        if one_by_one.length() != 1 || one_by_one.width() != 1 {
-            return Err(NotAOneByOneBrick(one_by_one));
-        } else if one_by_one.height() != 1 {
-            return Err(NotAPlate(one_by_one));
+        if one_by_one.length() != 1 || one_by_one.width() != 1 || one_by_one.height() != 1 {
+            return Err(NotAOneByOnePlate(one_by_one));
         }
 
         let mut two_by_one = two_by_one;
         if two_by_one.length() == 1 && two_by_one.width() == 2 {
             two_by_one = two_by_one.rotate_90();
-        } else if two_by_one.length() != 2 || two_by_one.width() != 1 {
-            return Err(NotATwoByOneBrick(two_by_one));
-        } else if two_by_one.height() != 1 {
-            return Err(NotAPlate(two_by_one));
+        } else if two_by_one.length() != 2 || two_by_one.width() != 1 || two_by_one.height() != 1 {
+            return Err(NotATwoByOnePlate(two_by_one));
         }
 
-        if two_by_two.length() != 2 || two_by_two.width() != 2 {
-            return Err(NotATwoByTwoBrick(two_by_two));
-        } else if two_by_two.height() != 1 {
-            return Err(NotAPlate(two_by_two));
+        if two_by_two.length() != 2 || two_by_two.width() != 2 || two_by_two.height() != 1 {
+            return Err(NotATwoByTwoPlate(two_by_two));
         }
 
         let mut even_by_one_bricks = vec![two_by_one];
         let mut one_by_even_bricks = vec![two_by_one.rotate_90()];
         let mut even_by_even_bricks = vec![two_by_two];
+        let mut filtered_other_bricks = Vec::new();
 
         for &brick in other_bricks {
-            if brick.height() != 1 {
-                return Err(NotAPlate(brick));
+            if brick.length() == 0 || brick.width() == 0 || brick.height() != 1 {
+                continue;
             }
+
+            filtered_other_bricks.push(brick);
 
             if is_even(brick.length() as u32) && brick.width() == 1 {
                 even_by_one_bricks.push(brick);
@@ -129,7 +125,7 @@ impl<B: Brick, C: Color> Base<B, C> {
             one_by_one,
             two_by_one,
             two_by_two,
-            other_bricks,
+            &filtered_other_bricks,
             length,
             width
         );
@@ -521,7 +517,7 @@ impl<B: Brick> FilledArea<B> {
 mod tests {
     use std::collections::BTreeSet;
     use crate::{Base, BaseError, Brick};
-    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_BY_TWO_BRICK, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_BY_TWO_BRICK, TWO_BY_ONE_PLATE, TWO_BY_TWO_BY_TWO_BRICK, TWO_BY_TWO_PLATE, UNIT_BRICK};
+    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_BY_TWO_BRICK, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_BY_TWO_BRICK, TWO_BY_ONE_PLATE, TWO_BY_TWO_BY_TWO_BRICK, TWO_BY_TWO_PLATE, UNIT_BRICK, ZERO_BY_TWO_PLATE};
 
     fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
@@ -2123,7 +2119,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotAOneByOneBrick(TWO_BY_ONE_PLATE), error);
+        assert_eq!(BaseError::NotAOneByOnePlate(TWO_BY_ONE_PLATE), error);
     }
 
     #[test]
@@ -2138,7 +2134,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotAOneByOneBrick(ONE_BY_TWO_PLATE), error);
+        assert_eq!(BaseError::NotAOneByOnePlate(ONE_BY_TWO_PLATE), error);
     }
 
     #[test]
@@ -2153,7 +2149,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotAPlate(HEIGHT_TWO_UNIT_BRICK), error);
+        assert_eq!(BaseError::NotAOneByOnePlate(HEIGHT_TWO_UNIT_BRICK), error);
     }
 
     #[test]
@@ -2168,7 +2164,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotATwoByOneBrick(THREE_BY_ONE_PLATE), error);
+        assert_eq!(BaseError::NotATwoByOnePlate(THREE_BY_ONE_PLATE), error);
     }
 
     #[test]
@@ -2183,7 +2179,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotATwoByOneBrick(THREE_BY_ONE_PLATE.rotate_90()), error);
+        assert_eq!(BaseError::NotATwoByOnePlate(THREE_BY_ONE_PLATE.rotate_90()), error);
     }
 
     #[test]
@@ -2198,7 +2194,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotAPlate(TWO_BY_ONE_BY_TWO_BRICK), error);
+        assert_eq!(BaseError::NotATwoByOnePlate(TWO_BY_ONE_BY_TWO_BRICK), error);
     }
 
     #[test]
@@ -2213,7 +2209,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotATwoByTwoBrick(THREE_BY_TWO_PLATE), error);
+        assert_eq!(BaseError::NotATwoByTwoPlate(THREE_BY_TWO_PLATE), error);
     }
 
     #[test]
@@ -2228,7 +2224,7 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotATwoByTwoBrick(THREE_BY_TWO_PLATE.rotate_90()), error);
+        assert_eq!(BaseError::NotATwoByTwoPlate(THREE_BY_TWO_PLATE.rotate_90()), error);
     }
 
     #[test]
@@ -2243,21 +2239,234 @@ mod tests {
             &[EIGHT_BY_EIGHT_PLATE]
         ).unwrap_err();
 
-        assert_eq!(BaseError::NotAPlate(TWO_BY_TWO_BY_TWO_BRICK), error);
+        assert_eq!(BaseError::NotATwoByTwoPlate(TWO_BY_TWO_BY_TWO_BRICK), error);
     }
 
+    //noinspection DuplicatedCode
     #[test]
     fn test_seventeen_by_nineteen_base_with_bad_height_other_plate() {
-        let error = Base::new(
+
+        // The brick with bad height should be ignored
+        let base = Base::new(
             17,
             19,
             TestColor::default(),
             UNIT_BRICK,
-            TWO_BY_ONE_PLATE,
+            ONE_BY_TWO_PLATE,
             TWO_BY_TWO_PLATE,
-            &[FOUR_BY_FOUR_BY_TWO_BRICK]
-        ).unwrap_err();
+            &[EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_BY_TWO_BRICK]
+        ).unwrap();
 
-        assert_eq!(BaseError::NotAPlate(FOUR_BY_FOUR_BY_TWO_BRICK), error);
+        assert_valid_base::<17, 19>(
+            &base, &[
+                &[(7, 1), (8, 1), (7, 2), (8, 2)],
+                &[(7, 3), (8, 3), (7, 4), (8, 4)],
+                &[(7, 5), (8, 5), (7, 6), (8, 6)],
+                &[(7, 7), (8, 7), (7, 8), (8, 8)],
+                &[(7, 9), (8, 9), (7, 10), (8, 10)],
+                &[(7, 11), (8, 11), (7, 12), (8, 12)],
+                &[(7, 13), (8, 13), (7, 14), (8, 14)],
+                &[(7, 15), (8, 15), (7, 16), (8, 16)],
+                &[(1, 7), (2, 7), (1, 8), (2, 8)],
+                &[(3, 7), (4, 7), (3, 8), (4, 8)],
+                &[(5, 7), (6, 7), (5, 8), (6, 8)],
+                &[(9, 7), (10, 7), (9, 8), (10, 8)],
+                &[(11, 7), (12, 7), (11, 8), (12, 8)],
+                &[(13, 7), (14, 7), (13, 8), (14, 8)],
+                &[(1, 15), (2, 15), (1, 16), (2, 16)],
+                &[(3, 15), (4, 15), (3, 16), (4, 16)],
+                &[(5, 15), (6, 15), (5, 16), (6, 16)],
+                &[(9, 15), (10, 15), (9, 16), (10, 16)],
+                &[(11, 15), (12, 15), (11, 16), (12, 16)],
+                &[(13, 15), (14, 15), (13, 16), (14, 16)],
+                &[(15, 1), (16, 1), (15, 2), (16, 2)],
+                &[(15, 3), (16, 3), (15, 4), (16, 4)],
+                &[(15, 5), (16, 5), (15, 6), (16, 6)],
+                &[(15, 7), (16, 7), (15, 8), (16, 8)],
+                &[(15, 9), (16, 9), (15, 10), (16, 10)],
+                &[(15, 11), (16, 11), (15, 12), (16, 12)],
+                &[(15, 13), (16, 13), (15, 14), (16, 14)],
+                &[(15, 15), (16, 15), (15, 16), (16, 16)],
+                &[(1, 17), (2, 17), (1, 18), (2, 18)],
+                &[(3, 17), (4, 17), (3, 18), (4, 18)],
+                &[(5, 17), (6, 17), (5, 18), (6, 18)],
+                &[(9, 17), (10, 17), (9, 18), (10, 18)],
+                &[(11, 17), (12, 17), (11, 18), (12, 18)],
+                &[(13, 17), (14, 17), (13, 18), (14, 18)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_zero_length_other_plate() {
+
+        // The brick with bad length should be ignored
+        let base = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            ONE_BY_TWO_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE, ZERO_BY_TWO_PLATE]
+        ).unwrap();
+
+        assert_valid_base::<17, 19>(
+            &base, &[
+                &[(7, 1), (8, 1), (7, 2), (8, 2)],
+                &[(7, 3), (8, 3), (7, 4), (8, 4)],
+                &[(7, 5), (8, 5), (7, 6), (8, 6)],
+                &[(7, 7), (8, 7), (7, 8), (8, 8)],
+                &[(7, 9), (8, 9), (7, 10), (8, 10)],
+                &[(7, 11), (8, 11), (7, 12), (8, 12)],
+                &[(7, 13), (8, 13), (7, 14), (8, 14)],
+                &[(7, 15), (8, 15), (7, 16), (8, 16)],
+                &[(1, 7), (2, 7), (1, 8), (2, 8)],
+                &[(3, 7), (4, 7), (3, 8), (4, 8)],
+                &[(5, 7), (6, 7), (5, 8), (6, 8)],
+                &[(9, 7), (10, 7), (9, 8), (10, 8)],
+                &[(11, 7), (12, 7), (11, 8), (12, 8)],
+                &[(13, 7), (14, 7), (13, 8), (14, 8)],
+                &[(1, 15), (2, 15), (1, 16), (2, 16)],
+                &[(3, 15), (4, 15), (3, 16), (4, 16)],
+                &[(5, 15), (6, 15), (5, 16), (6, 16)],
+                &[(9, 15), (10, 15), (9, 16), (10, 16)],
+                &[(11, 15), (12, 15), (11, 16), (12, 16)],
+                &[(13, 15), (14, 15), (13, 16), (14, 16)],
+                &[(15, 1), (16, 1), (15, 2), (16, 2)],
+                &[(15, 3), (16, 3), (15, 4), (16, 4)],
+                &[(15, 5), (16, 5), (15, 6), (16, 6)],
+                &[(15, 7), (16, 7), (15, 8), (16, 8)],
+                &[(15, 9), (16, 9), (15, 10), (16, 10)],
+                &[(15, 11), (16, 11), (15, 12), (16, 12)],
+                &[(15, 13), (16, 13), (15, 14), (16, 14)],
+                &[(15, 15), (16, 15), (15, 16), (16, 16)],
+                &[(1, 17), (2, 17), (1, 18), (2, 18)],
+                &[(3, 17), (4, 17), (3, 18), (4, 18)],
+                &[(5, 17), (6, 17), (5, 18), (6, 18)],
+                &[(9, 17), (10, 17), (9, 18), (10, 18)],
+                &[(11, 17), (12, 17), (11, 18), (12, 18)],
+                &[(13, 17), (14, 17), (13, 18), (14, 18)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_zero_width_other_plate() {
+
+        // The brick with bad width should be ignored
+        let base = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            ONE_BY_TWO_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE, ZERO_BY_TWO_PLATE.rotate_90()]
+        ).unwrap();
+
+        assert_valid_base::<17, 19>(
+            &base, &[
+                &[(7, 1), (8, 1), (7, 2), (8, 2)],
+                &[(7, 3), (8, 3), (7, 4), (8, 4)],
+                &[(7, 5), (8, 5), (7, 6), (8, 6)],
+                &[(7, 7), (8, 7), (7, 8), (8, 8)],
+                &[(7, 9), (8, 9), (7, 10), (8, 10)],
+                &[(7, 11), (8, 11), (7, 12), (8, 12)],
+                &[(7, 13), (8, 13), (7, 14), (8, 14)],
+                &[(7, 15), (8, 15), (7, 16), (8, 16)],
+                &[(1, 7), (2, 7), (1, 8), (2, 8)],
+                &[(3, 7), (4, 7), (3, 8), (4, 8)],
+                &[(5, 7), (6, 7), (5, 8), (6, 8)],
+                &[(9, 7), (10, 7), (9, 8), (10, 8)],
+                &[(11, 7), (12, 7), (11, 8), (12, 8)],
+                &[(13, 7), (14, 7), (13, 8), (14, 8)],
+                &[(1, 15), (2, 15), (1, 16), (2, 16)],
+                &[(3, 15), (4, 15), (3, 16), (4, 16)],
+                &[(5, 15), (6, 15), (5, 16), (6, 16)],
+                &[(9, 15), (10, 15), (9, 16), (10, 16)],
+                &[(11, 15), (12, 15), (11, 16), (12, 16)],
+                &[(13, 15), (14, 15), (13, 16), (14, 16)],
+                &[(15, 1), (16, 1), (15, 2), (16, 2)],
+                &[(15, 3), (16, 3), (15, 4), (16, 4)],
+                &[(15, 5), (16, 5), (15, 6), (16, 6)],
+                &[(15, 7), (16, 7), (15, 8), (16, 8)],
+                &[(15, 9), (16, 9), (15, 10), (16, 10)],
+                &[(15, 11), (16, 11), (15, 12), (16, 12)],
+                &[(15, 13), (16, 13), (15, 14), (16, 14)],
+                &[(15, 15), (16, 15), (15, 16), (16, 16)],
+                &[(1, 17), (2, 17), (1, 18), (2, 18)],
+                &[(3, 17), (4, 17), (3, 18), (4, 18)],
+                &[(5, 17), (6, 17), (5, 18), (6, 18)],
+                &[(9, 17), (10, 17), (9, 18), (10, 18)],
+                &[(11, 17), (12, 17), (11, 18), (12, 18)],
+                &[(13, 17), (14, 17), (13, 18), (14, 18)]
+            ],
+            [
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+            ]
+        );
     }
 }
