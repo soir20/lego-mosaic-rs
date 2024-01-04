@@ -1131,7 +1131,7 @@ mod tests {
             .map(|color| TestColor { value: color })
             .collect();
 
-        (img, EuclideanDistancePalette::new(&palette[..]))
+        (img, EuclideanDistancePalette::new(&palette))
     }
 
     #[test]
