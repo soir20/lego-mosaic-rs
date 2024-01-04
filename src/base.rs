@@ -1,6 +1,6 @@
 use std::iter;
-use crate::{Brick, Color, PlacedBrick};
-use crate::BaseError::{NotAOneByOnePlate, NotATwoByOnePlate, NotATwoByTwoPlate};
+use crate::{Brick, Color, NonUnitBrick, PlacedBrick, UnitBrick};
+use crate::BaseError::{NotATwoByOnePlate, NotATwoByTwoPlate};
 
 // ====================
 // PUBLIC STRUCTS
@@ -9,27 +9,22 @@ use crate::BaseError::{NotAOneByOnePlate, NotATwoByOnePlate, NotATwoByTwoPlate};
 #[non_exhaustive]
 #[derive(Debug, Eq, PartialEq)]
 pub enum BaseError<B> {
-    NotAOneByOnePlate(B),
     NotATwoByOnePlate(B),
     NotATwoByTwoPlate(B)
 }
 
 #[derive(Debug)]
-pub struct Base<B, C> {
-    base_bricks: Vec<FilledArea<B>>,
-    support_bricks: Vec<FilledArea<B>>,
+pub struct Base<U, B, C> {
+    base_bricks: Vec<FilledArea<U, B>>,
+    support_bricks: Vec<FilledArea<U, B>>,
     color: C,
     length: u32,
     width: u32
 }
 
-impl<B: Brick, C: Color> Base<B, C> {
+impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Base<U, B, C> {
 
-    pub fn new(length: u32, width: u32, color: C, one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B]) -> Result<Base<B, C>, BaseError<B>> {
-        if one_by_one.length() != 1 || one_by_one.width() != 1 || one_by_one.height() != 1 {
-            return Err(NotAOneByOnePlate(one_by_one));
-        }
-
+    pub fn new(length: u32, width: u32, color: C, one_by_one: U, two_by_one: B, two_by_two: B, other_bricks: &[B]) -> Result<Base<U, B, C>, BaseError<B>> {
         let mut two_by_one = two_by_one;
         if two_by_one.length() == 1 && two_by_one.width() == 2 {
             two_by_one = two_by_one.rotate_90();
@@ -41,9 +36,9 @@ impl<B: Brick, C: Color> Base<B, C> {
             return Err(NotATwoByTwoPlate(two_by_two));
         }
 
-        let mut even_by_one_bricks = vec![two_by_one];
-        let mut one_by_even_bricks = vec![two_by_one.rotate_90()];
-        let mut even_by_even_bricks = vec![two_by_two];
+        let mut even_by_one_bricks = vec![Brick::NonUnit(two_by_one)];
+        let mut one_by_even_bricks = vec![Brick::NonUnit(two_by_one.rotate_90())];
+        let mut even_by_even_bricks = vec![Brick::NonUnit(two_by_two)];
         let mut filtered_other_bricks = Vec::new();
 
         for &brick in other_bricks {
@@ -51,18 +46,19 @@ impl<B: Brick, C: Color> Base<B, C> {
                 continue;
             }
 
-            filtered_other_bricks.push(brick);
+            let wrapped_brick = Brick::NonUnit(brick);
+            filtered_other_bricks.push(wrapped_brick);
 
             if is_even(brick.length() as u32) && brick.width() == 1 {
-                even_by_one_bricks.push(brick);
-                one_by_even_bricks.push(brick.rotate_90());
+                even_by_one_bricks.push(wrapped_brick);
+                one_by_even_bricks.push(wrapped_brick.rotate_90());
             } else if brick.length() == 1 && is_even(brick.width() as u32) {
-                even_by_one_bricks.push(brick.rotate_90());
-                one_by_even_bricks.push(brick);
+                even_by_one_bricks.push(wrapped_brick.rotate_90());
+                one_by_even_bricks.push(wrapped_brick);
             } else if is_even(brick.length() as u32) && is_even(brick.width() as u32) {
-                even_by_even_bricks.push(brick);
+                even_by_even_bricks.push(wrapped_brick);
                 if brick.length() != brick.width() {
-                    even_by_even_bricks.push(brick.rotate_90());
+                    even_by_even_bricks.push(wrapped_brick.rotate_90());
                 }
             }
         }
@@ -112,7 +108,7 @@ impl<B: Brick, C: Color> Base<B, C> {
 
         if is_odd_length && is_odd_width {
             base_bricks.push(FilledArea {
-                brick: one_by_one,
+                brick: Brick::Unit(one_by_one),
                 l: even_length,
                 w: even_width,
                 length: 1,
@@ -120,7 +116,7 @@ impl<B: Brick, C: Color> Base<B, C> {
             });
         }
 
-        let support_bricks = Base::<B, C>::build_supports(
+        let support_bricks = Base::<U, B, C>::build_supports(
             &base_bricks,
             one_by_one,
             two_by_one,
@@ -139,7 +135,7 @@ impl<B: Brick, C: Color> Base<B, C> {
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=PlacedBrick<B, C>> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item=PlacedBrick<U, B, C>> + '_ {
         self.layer_iter(&self.support_bricks, 0).chain(self.layer_iter(&self.base_bricks, 1))
     }
 
@@ -155,9 +151,14 @@ impl<B: Brick, C: Color> Base<B, C> {
         2
     }
 
-    fn build_supports(base_bricks: &Vec<FilledArea<B>>, one_by_one: B, two_by_one: B, two_by_two: B, other_bricks: &[B],
-                      mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<B>> {
-        let mut bricks = vec![one_by_one, two_by_one, two_by_one.rotate_90(), two_by_two];
+    fn build_supports(base_bricks: &Vec<FilledArea<U, B>>, one_by_one: U, two_by_one: B, two_by_two: B,
+                      other_bricks: &[Brick<U, B>], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<U, B>> {
+        let mut bricks = vec![
+            Brick::Unit(one_by_one),
+            Brick::NonUnit(two_by_one),
+            Brick::NonUnit(two_by_one.rotate_90()),
+            Brick::NonUnit(two_by_two)
+        ];
         bricks.extend_from_slice(other_bricks);
 
         // Return the same single brick used for 2x2 and smaller bases
@@ -166,14 +167,14 @@ impl<B: Brick, C: Color> Base<B, C> {
         } else if mosaic_length == 3 && mosaic_width == 2 {
             return vec![
                 FilledArea {
-                    brick: two_by_one.rotate_90(),
+                    brick: Brick::NonUnit(two_by_one.rotate_90()),
                     l: 0,
                     w: 0,
                     length: 1,
                     width: 2
                 },
                 FilledArea {
-                    brick: two_by_two,
+                    brick: Brick::NonUnit(two_by_two),
                     l: 1,
                     w: 0,
                     length: 2,
@@ -183,14 +184,14 @@ impl<B: Brick, C: Color> Base<B, C> {
         } else if mosaic_length == 2 && mosaic_width == 3 {
             return vec![
                 FilledArea {
-                    brick: two_by_one,
+                    brick: Brick::NonUnit(two_by_one),
                     l: 0,
                     w: 0,
                     length: 2,
                     width: 1
                 },
                 FilledArea {
-                    brick: two_by_two,
+                    brick: Brick::NonUnit(two_by_two),
                     l: 0,
                     w: 1,
                     length: 2,
@@ -204,7 +205,7 @@ impl<B: Brick, C: Color> Base<B, C> {
             .collect()
     }
 
-    fn layer_iter<'a>(&'a self, bricks: &'a Vec<FilledArea<B>>, h: u32) -> impl Iterator<Item=PlacedBrick<B, C>> + '_ {
+    fn layer_iter<'a>(&'a self, bricks: &'a Vec<FilledArea<U, B>>, h: u32) -> impl Iterator<Item=PlacedBrick<U, B, C>> + '_ {
         bricks.iter().flat_map(move |area|
             (area.l..(area.l + area.length)).step_by(area.brick.length() as usize).flat_map(move |l|
                 (area.w..(area.w + area.width)).step_by(area.brick.width() as usize).map(move |w| PlacedBrick {
@@ -236,7 +237,7 @@ fn sub_at_most(n: u32, amount: u32) -> u32 {
     n - n.min(amount)
 }
 
-fn sort_by_area<B: Brick>(bricks: &mut Vec<B>) {
+fn sort_by_area<U: UnitBrick, B: NonUnitBrick<U>>(bricks: &mut Vec<Brick<U, B>>) {
     bricks.sort_by(|brick1, brick2| {
         let area1= brick1.length() as u16 * brick1.width() as u16;
         let area2 = brick2.length() as u16 * brick2.width() as u16;
@@ -247,7 +248,7 @@ fn sort_by_area<B: Brick>(bricks: &mut Vec<B>) {
     });
 }
 
-fn fill<B: Brick>(min_l: u32, min_w: u32, length: u32, width: u32, min_index: usize, bricks: &[B]) -> Vec<FilledArea<B>> {
+fn fill<U: UnitBrick, B: NonUnitBrick<U>>(min_l: u32, min_w: u32, length: u32, width: u32, min_index: usize, bricks: &[Brick<U, B>]) -> Vec<FilledArea<U, B>> {
     let mut remaining_length = length;
     let mut remaining_width = width;
 
@@ -314,17 +315,17 @@ fn fill<B: Brick>(min_l: u32, min_w: u32, length: u32, width: u32, min_index: us
 // ====================
 
 #[derive(Copy, Clone, Debug)]
-struct FilledArea<B> {
-    brick: B,
+struct FilledArea<U, B> {
+    brick: Brick<U, B>,
     l: u32,
     w: u32,
     length: u32,
     width: u32
 }
 
-impl<B: Brick> FilledArea<B> {
-    fn build_supports(&self, bricks: &[B], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<B>> {
-        let (length_two_bricks, width_two_bricks) = FilledArea::<B>::filter_bricks(bricks);
+impl<U: UnitBrick, B: NonUnitBrick<U>> FilledArea<U, B> {
+    fn build_supports(&self, bricks: &[Brick<U, B>], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<U, B>> {
+        let (length_two_bricks, width_two_bricks) = FilledArea::<U, B>::filter_bricks(bricks);
 
         let is_leftmost_area = self.l == 0;
         let is_topmost_area = self.w == 0;
@@ -404,7 +405,7 @@ impl<B: Brick> FilledArea<B> {
         let needs_right_border = is_even(mosaic_length) && is_rightmost_area;
         let needs_bottom_border = is_even(mosaic_width) && is_bottommost_area;
 
-        let mut border_bricks: Vec<B> = bricks.iter()
+        let mut border_bricks: Vec<Brick<U, B>> = bricks.iter()
             .filter(|brick| brick.length() == 1 || brick.width() == 1)
             .flat_map(|&brick| iter::once(brick).chain(iter::once(brick.rotate_90())))
             .collect();
@@ -492,7 +493,7 @@ impl<B: Brick> FilledArea<B> {
         supports
     }
 
-    fn filter_bricks(bricks: &[B]) -> (Vec<B>, Vec<B>) {
+    fn filter_bricks(bricks: &[Brick<U, B>]) -> (Vec<Brick<U, B>>, Vec<Brick<U, B>>) {
         let mut length_two_bricks = Vec::new();
         let mut width_two_bricks = Vec::new();
 
@@ -516,10 +517,10 @@ impl<B: Brick> FilledArea<B> {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-    use crate::{Base, BaseError, Brick};
-    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_BY_TWO_BRICK, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_BY_TWO_BRICK, TWO_BY_ONE_PLATE, TWO_BY_TWO_BY_TWO_BRICK, TWO_BY_TWO_PLATE, UNIT_BRICK, ZERO_BY_TWO_PLATE};
+    use crate::{Base, BaseError, NonUnitBrick};
+    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_BY_TWO_BRICK, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_BY_TWO_BRICK, TWO_BY_ONE_PLATE, TWO_BY_TWO_BY_TWO_BRICK, TWO_BY_TWO_PLATE, UNIT_BRICK, ZERO_BY_TWO_PLATE};
 
-    fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
+    fn assert_valid_base<const L: usize, const W: usize>(base: &Base<u8, TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
                                                          expected_counts: [[u32; L]; W]) {
         let mut actual_counts = [[0; L]; W];
@@ -2105,51 +2106,6 @@ mod tests {
                 [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
             ]
         );
-    }
-
-    #[test]
-    fn test_seventeen_by_nineteen_base_with_bad_length_unit_brick() {
-        let error = Base::new(
-            17,
-            19,
-            TestColor::default(),
-            TWO_BY_ONE_PLATE,
-            TWO_BY_ONE_PLATE,
-            TWO_BY_TWO_PLATE,
-            &[EIGHT_BY_EIGHT_PLATE]
-        ).unwrap_err();
-
-        assert_eq!(BaseError::NotAOneByOnePlate(TWO_BY_ONE_PLATE), error);
-    }
-
-    #[test]
-    fn test_seventeen_by_nineteen_base_with_bad_width_unit_brick() {
-        let error = Base::new(
-            17,
-            19,
-            TestColor::default(),
-            ONE_BY_TWO_PLATE,
-            TWO_BY_ONE_PLATE,
-            TWO_BY_TWO_PLATE,
-            &[EIGHT_BY_EIGHT_PLATE]
-        ).unwrap_err();
-
-        assert_eq!(BaseError::NotAOneByOnePlate(ONE_BY_TWO_PLATE), error);
-    }
-
-    #[test]
-    fn test_seventeen_by_nineteen_base_with_bad_height_unit_brick() {
-        let error = Base::new(
-            17,
-            19,
-            TestColor::default(),
-            HEIGHT_TWO_UNIT_BRICK,
-            TWO_BY_ONE_PLATE,
-            TWO_BY_TWO_PLATE,
-            &[EIGHT_BY_EIGHT_PLATE]
-        ).unwrap_err();
-
-        assert_eq!(BaseError::NotAOneByOnePlate(HEIGHT_TWO_UNIT_BRICK), error);
     }
 
     #[test]

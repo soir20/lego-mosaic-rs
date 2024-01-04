@@ -1,7 +1,6 @@
 use std::fmt::Display;
-use std::hash::{Hash, Hasher};
 use std::io::Write;
-use crate::{Brick, Color, Mosaic, PlacedBrick, Srgba};
+use crate::{Brick, Mosaic, NonUnitBrick, PlacedBrick, Srgba, UnitBrick};
 use crate::base::Base;
 
 // ====================
@@ -461,6 +460,53 @@ pub struct SubPartCommand<'a> {
 }
 
 impl SubPartCommand<'_> {
+    pub fn new<U: UnitBrick>(l: u32, w: u32, h: u32, brick: Brick<U, LdrawBrick<U>>, color: LdrawColor, file: &str, mosaic_width: u32) -> SubPartCommand {
+        let ldraw_horizontal_scale = 20f64;
+        let ldraw_vertical_scale = 8f64;
+
+        let x = (l as f64 + brick.length() as f64 / 2f64) * ldraw_horizontal_scale;
+        let y = -(brick.height() as f64 + h as f64) * ldraw_vertical_scale;
+        let z = (mosaic_width as f64 - w as f64 - brick.width() as f64 / 2f64) * ldraw_horizontal_scale;
+
+        // Use x=0, y=0, z=0 to rotate about part's origin
+        let transform = match brick {
+            Brick::Unit(_) => BASE_TRANSFORM,
+            Brick::NonUnit(non_unit) => match non_unit.rotated() {
+                true => ROTATED_TRANSFORM,
+                false => BASE_TRANSFORM
+            }
+        };
+
+        let a = transform[0][0];
+        let b = transform[1][0];
+        let c = transform[2][0];
+
+        let d = transform[0][1];
+        let e = transform[1][1];
+        let f = transform[2][1];
+
+        let g = transform[0][2];
+        let h = transform[1][2];
+        let i = transform[2][2];
+
+        SubPartCommand {
+            color: color.id,
+            x,
+            y,
+            z,
+            a,
+            b,
+            c,
+            d,
+            e,
+            f,
+            g,
+            h,
+            i,
+            file
+        }
+    }
+
     pub fn color(&self) -> u16 {
         self.color
     }
@@ -566,115 +612,47 @@ impl Display for SubPartCommand<'_> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct LdrawBrick<'a> {
+pub struct LdrawBrick<U> {
     length: u8,
     width: u8,
     height: u8,
-    family: u8,
-    unit_brick: Option<&'a LdrawBrick<'a>>,
+    unit_brick: U,
     rotated: bool
 }
 
-impl<'a> LdrawBrick<'a> {
-    pub fn new(length: u8, width: u8, height: u8, unit_brick: &'a Self) -> Self {
+impl<U: UnitBrick> LdrawBrick<U> {
+    pub fn new(length: u8, width: u8, height: u8, unit_brick: U) -> Self {
         LdrawBrick {
             length,
             width,
             height,
-            family: unit_brick.family,
-            unit_brick: Some(unit_brick),
+            unit_brick,
             rotated: false
         }
     }
 
-    pub fn new_unit(family: u8) -> Self {
-        LdrawBrick {
-            length: 1,
-            width: 1,
-            height: 1,
-            family,
-            unit_brick: None,
-            rotated: false
-        }
-    }
-
-    pub fn family(&self) -> u8 {
-        self.family
+    pub fn unit_brick(&self) -> U {
+        self.unit_brick
     }
 
     pub fn rotated(&self) -> bool {
         self.rotated
     }
-
-    pub fn command(&self, l: u32, w: u32, h: u32, color: LdrawColor, file: &'a str,
-                   mosaic_width: u32) -> SubPartCommand {
-        let ldraw_horizontal_scale = 20f64;
-        let ldraw_vertical_scale = 8f64;
-
-        let x = (l as f64 + self.length as f64 / 2f64) * ldraw_horizontal_scale;
-        let y = -(self.height as f64 + h as f64) * ldraw_vertical_scale;
-        let z = (mosaic_width as f64 - w as f64 - self.width as f64 / 2f64) * ldraw_horizontal_scale;
-
-        // Use x=0, y=0, z=0 to rotate about part's origin
-        let transform = match self.rotated {
-            true => ROTATED_TRANSFORM,
-            false => BASE_TRANSFORM
-        };
-
-        let a = transform[0][0];
-        let b = transform[1][0];
-        let c = transform[2][0];
-
-        let d = transform[0][1];
-        let e = transform[1][1];
-        let f = transform[2][1];
-
-        let g = transform[0][2];
-        let h = transform[1][2];
-        let i = transform[2][2];
-
-        SubPartCommand {
-            color: color.id,
-            x,
-            y,
-            z,
-            a,
-            b,
-            c,
-            d,
-            e,
-            f,
-            g,
-            h,
-            i,
-            file
-        }
-    }
 }
 
-impl Hash for LdrawBrick<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u8(self.length);
-        state.write_u8(self.width);
-        state.write_u8(self.height);
-        state.write_u8(self.family);
-        state.write_u8(u8::from(self.rotated));
-    }
-}
+impl<U: UnitBrick> Eq for LdrawBrick<U> {}
 
-impl Eq for LdrawBrick<'_> {}
-
-impl PartialEq<Self> for LdrawBrick<'_> {
+impl<U: UnitBrick> PartialEq<Self> for LdrawBrick<U> {
     fn eq(&self, other: &Self) -> bool {
         self.length == other.length
             && self.width == other.width
             && self.height == other.height
-            && self.family == other.family
+            && self.unit_brick == other.unit_brick
             && self.rotated == other.rotated
     }
 }
 
-impl Brick for LdrawBrick<'_> {
+impl<U: UnitBrick> NonUnitBrick<U> for LdrawBrick<U> {
     fn length(&self) -> u8 {
         self.length
     }
@@ -687,11 +665,8 @@ impl Brick for LdrawBrick<'_> {
         self.height
     }
 
-    fn unit_brick(&self) -> Self {
-        match self.unit_brick {
-            None => *self,
-            Some(unit_brick) => *unit_brick
-        }
+    fn unit_brick(&self) -> U {
+        self.unit_brick
     }
 
     fn rotate_90(&self) -> Self {
@@ -700,7 +675,6 @@ impl Brick for LdrawBrick<'_> {
             width: self.length,
             height: self.height,
             unit_brick: self.unit_brick,
-            family: self.family,
             rotated: !self.rotated
         }
     }
@@ -730,31 +704,23 @@ impl PartialEq<Self> for LdrawColor {
     }
 }
 
-impl Hash for LdrawColor {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u16(self.id)
-    }
-}
-
 impl From<LdrawColor> for Srgba<u8> {
     fn from(color: LdrawColor) -> Self {
         color.value
     }
 }
 
-impl Color for LdrawColor {}
-
 // ====================
 // PUBLIC FUNCTIONS
 // ====================
 
-pub fn write_mosaic(buffer: &mut impl Write, mosaic: &Mosaic<LdrawBrick, LdrawColor>,
-                    id_fn: impl FnMut(LdrawBrick) -> &str, height_offset: u32) -> std::io::Result<usize> {
+pub fn write_mosaic<'a, U: UnitBrick>(buffer: &mut impl Write, mosaic: &Mosaic<U, LdrawBrick<U>, LdrawColor>,
+                                      id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str, height_offset: u32) -> std::io::Result<usize> {
     write(buffer, mosaic.iter(), id_fn, mosaic.width(), height_offset)
 }
 
-pub fn write_base(buffer: &mut impl Write, base: &Base<LdrawBrick, LdrawColor>,
-                  id_fn: impl FnMut(LdrawBrick) -> &str) -> std::io::Result<usize> {
+pub fn write_base<'a, U: UnitBrick>(buffer: &mut impl Write, base: &Base<U, LdrawBrick<U>, LdrawColor>,
+                                    id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str) -> std::io::Result<usize> {
     write(buffer, base.iter(), id_fn, base.width(), 0)
 }
 
@@ -780,15 +746,16 @@ const ROTATED_TRANSFORM: [[f64; 4]; 4] = [
 // PRIVATE FUNCTIONS
 // ====================
 
-fn write<'a>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<LdrawBrick<'a>, LdrawColor>>,
-             mut id_fn: impl FnMut(LdrawBrick) -> &str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
+fn write<'a, U: UnitBrick>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<U, LdrawBrick<U>, LdrawColor>>,
+                           mut id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
     let mut bytes = 0;
 
     for placement in bricks {
-        let command = placement.brick.command(
+        let command = SubPartCommand::new(
             placement.l,
             placement.w,
             placement.h + height_offset,
+            placement.brick,
             placement.color,
             id_fn(placement.brick),
             mosaic_width
