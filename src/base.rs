@@ -36,7 +36,7 @@ impl<B: Brick, C: Color> Base<B, C> {
         let mut two_by_one = two_by_one;
         if two_by_one.length() == 1 && two_by_one.width() == 2 {
             two_by_one = two_by_one.rotate_90();
-        } else if two_by_one.length() != 2 && two_by_one.width() != 1 {
+        } else if two_by_one.length() != 2 || two_by_one.width() != 1 {
             return Err(NotATwoByOneBrick(two_by_one));
         } else if two_by_one.height() != 1 {
             return Err(NotAPlate(two_by_one));
@@ -521,7 +521,7 @@ impl<B: Brick> FilledArea<B> {
 mod tests {
     use std::collections::BTreeSet;
     use crate::{Base, BaseError, Brick};
-    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
+    use crate::tests::{EIGHT_BY_EIGHT_PLATE, FOUR_BY_FOUR_PLATE, FOUR_BY_THREE_PLATE, FOUR_BY_TWO_PLATE, HEIGHT_TWO_UNIT_BRICK, ONE_BY_TWO_PLATE, TestBrick, TestColor, THREE_BY_ONE_PLATE, THREE_BY_THREE_PLATE, THREE_BY_TWO_PLATE, TWO_BY_ONE_BY_TWO_BRICK, TWO_BY_ONE_PLATE, TWO_BY_TWO_PLATE, UNIT_BRICK};
 
     fn assert_valid_base<const L: usize, const W: usize>(base: &Base<TestBrick, TestColor>,
                                                          expected_connections: &[&[(u32, u32)]],
@@ -2157,5 +2157,53 @@ mod tests {
         ).unwrap_err();
 
         assert_eq!(BaseError::NotAPlate(HEIGHT_TWO_UNIT_BRICK), error);
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_length_two_by_one_plate() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            THREE_BY_ONE_PLATE,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotATwoByOneBrick(THREE_BY_ONE_PLATE), error);
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_width_two_by_one_plate() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            THREE_BY_ONE_PLATE.rotate_90(),
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotATwoByOneBrick(THREE_BY_ONE_PLATE.rotate_90()), error);
+    }
+
+    //noinspection DuplicatedCode
+    #[test]
+    fn test_seventeen_by_nineteen_base_with_bad_height_two_by_one_plate() {
+        let error = Base::new(
+            17,
+            19,
+            TestColor::default(),
+            UNIT_BRICK,
+            TWO_BY_ONE_BY_TWO_BRICK,
+            TWO_BY_TWO_PLATE,
+            &[EIGHT_BY_EIGHT_PLATE]
+        ).unwrap_err();
+
+        assert_eq!(BaseError::NotAPlate(TWO_BY_ONE_BY_TWO_BRICK), error);
     }
 }

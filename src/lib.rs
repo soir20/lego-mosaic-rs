@@ -968,6 +968,33 @@ mod tests {
         unit_brick: None,
     };
 
+    pub(crate) const TWO_BY_ONE_BY_TWO_BRICK: TestBrick = TestBrick {
+        id: "2x1x2",
+        rotation_count: 0,
+        length: 2,
+        width: 1,
+        height: 2,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const TWO_BY_TWO_BY_TWO_BRICK: TestBrick = TestBrick {
+        id: "2x2x2",
+        rotation_count: 0,
+        length: 2,
+        width: 2,
+        height: 2,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
+    pub(crate) const FOUR_BY_FOUR_BY_TWO_BRICK: TestBrick = TestBrick {
+        id: "4x4x2",
+        rotation_count: 0,
+        length: 4,
+        width: 4,
+        height: 2,
+        unit_brick: Some(&UNIT_BRICK),
+    };
+
     #[derive(Copy, Clone, Debug, Eq)]
     pub(crate) struct TestColor {
         value: Srgba<u8>
