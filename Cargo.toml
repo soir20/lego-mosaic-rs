@@ -13,7 +13,7 @@ palette = { version = "0.7.3", optional = true }
 image = { version = "0.24.7", optional = true }
 
 [features]
-default = ["palette", "image", "ldraw"]
+default = ["palette"]
 palette = ["dep:kd-tree", "dep:typenum", "dep:palette"]
 image = ["dep:image"]
 ldraw = []
