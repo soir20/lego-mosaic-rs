@@ -59,6 +59,8 @@ pub trait NonUnitBrick<U>: Copy + Eq {
     fn unit_brick(&self) -> U;
 
     fn rotate_90(&self) -> Self;
+
+    fn is_rotation_of(&self, other: &Self) -> bool;
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -266,26 +268,22 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
         Ok(Mosaic::new(sections, image.length(), image.width()))
     }
 
-    pub fn reduce_bricks(self, bricks: &[B]) -> Result<Self, MosaicError> {
+    pub fn reduce_bricks(self, bricks: &[B], exclusions: &[(B, C)]) -> Result<Self, MosaicError> {
         let bricks_by_type: BTreeMap<U, Vec<VolumeSortedBrick<U, B>>> = bricks.iter()
-            .fold(Ok(BTreeMap::new()), |partitions_result, &brick| {
-                if let Ok(mut partitions) = partitions_result {
+            .fold(BTreeMap::new(), |mut partitions, &brick| {
 
-                    // Consider each brick's associated unit brick as its type
-                    let unit_brick = brick.unit_brick();
-                    let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
-                    entry.push(VolumeSortedBrick { brick: Brick::NonUnit(brick) });
+                // Consider each brick's associated unit brick as its type
+                let unit_brick = brick.unit_brick();
+                let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
+                entry.push(VolumeSortedBrick { brick: Brick::NonUnit(brick) });
 
-                    // A square brick rotated 90 degrees is redundant
-                    if brick.length() != brick.width() {
-                        entry.push(VolumeSortedBrick { brick: Brick::NonUnit(brick.rotate_90()) });
-                    }
-
-                    Ok(partitions)
-                } else {
-                    partitions_result
+                // A square brick rotated 90 degrees is redundant
+                if brick.length() != brick.width() {
+                    entry.push(VolumeSortedBrick { brick: Brick::NonUnit(brick.rotate_90()) });
                 }
-            })?
+
+                partitions
+            })
             .into_iter()
             .map(|(unit_brick, mut bricks)| {
 
@@ -306,8 +304,17 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
                 h,
                 chunks.into_iter().map(|chunk| {
                     if bricks_by_type.contains_key(&chunk.unit_brick) {
-                        let bricks_by_height = &bricks_by_type[&chunk.unit_brick];
-                        chunk.reduce_bricks(bricks_by_height)
+                        let bricks_by_height = bricks_by_type[&chunk.unit_brick].iter()
+                            .filter(|brick| {
+                                if let Brick::NonUnit(non_unit) = brick.brick {
+                                    !exclusions.iter().any(|exclusion| chunk.color == exclusion.1 && exclusion.0.is_rotation_of(&non_unit))
+                                } else {
+                                    true
+                                }
+                            })
+                            .copied()
+                            .collect();
+                        chunk.reduce_bricks(&bricks_by_height)
                     } else {
                         chunk
                     }
@@ -593,6 +600,7 @@ fn is_new_pos<U: UnitBrick, C: Color>(visited: &BoolVec,
 // PRIVATE STRUCTS
 // ====================
 
+#[derive(Copy, Clone)]
 struct VolumeSortedBrick<U, B> {
     brick: Brick<U, B>
 }
@@ -857,6 +865,10 @@ mod tests {
                 height: self.height,
                 unit_brick: self.unit_brick,
             }
+        }
+
+        fn is_rotation_of(&self, other: &Self) -> bool {
+            self.id == other.id && self.unit_brick == other.unit_brick
         }
     }
 

@@ -460,7 +460,8 @@ pub struct SubPartCommand<'a> {
 }
 
 impl SubPartCommand<'_> {
-    pub fn new<U: UnitBrick>(l: u32, w: u32, h: u32, brick: Brick<U, LdrawBrick<U>>, color: LdrawColor, file: &str, mosaic_width: u32) -> SubPartCommand {
+    pub fn new<I: Copy + Eq, U: UnitBrick>(l: u32, w: u32, h: u32, brick: Brick<U, LdrawBrick<I, U>>, color: LdrawColor,
+                                           file: &str, mosaic_width: u32) -> SubPartCommand {
         let ldraw_horizontal_scale = 20f64;
         let ldraw_vertical_scale = 8f64;
 
@@ -612,7 +613,8 @@ impl Display for SubPartCommand<'_> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct LdrawBrick<U> {
+pub struct LdrawBrick<I, U> {
+    id: I,
     length: u8,
     width: u8,
     height: u8,
@@ -620,9 +622,10 @@ pub struct LdrawBrick<U> {
     rotated: bool
 }
 
-impl<U: UnitBrick> LdrawBrick<U> {
-    pub fn new(length: u8, width: u8, height: u8, unit_brick: U) -> Self {
+impl<I, U: UnitBrick> LdrawBrick<I, U> {
+    pub fn new(id: I, length: u8, width: u8, height: u8, unit_brick: U) -> Self {
         LdrawBrick {
+            id,
             length,
             width,
             height,
@@ -640,19 +643,17 @@ impl<U: UnitBrick> LdrawBrick<U> {
     }
 }
 
-impl<U: UnitBrick> Eq for LdrawBrick<U> {}
+impl<I: Copy + Eq, U: UnitBrick> Eq for LdrawBrick<I, U> {}
 
-impl<U: UnitBrick> PartialEq<Self> for LdrawBrick<U> {
+impl<I: Copy + Eq, U: UnitBrick> PartialEq<Self> for LdrawBrick<I, U> {
     fn eq(&self, other: &Self) -> bool {
-        self.length == other.length
-            && self.width == other.width
-            && self.height == other.height
+        self.id == other.id
             && self.unit_brick == other.unit_brick
             && self.rotated == other.rotated
     }
 }
 
-impl<U: UnitBrick> NonUnitBrick<U> for LdrawBrick<U> {
+impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
     fn length(&self) -> u8 {
         self.length
     }
@@ -671,12 +672,17 @@ impl<U: UnitBrick> NonUnitBrick<U> for LdrawBrick<U> {
 
     fn rotate_90(&self) -> Self {
         LdrawBrick {
+            id: self.id,
             length: self.width,
             width: self.length,
             height: self.height,
             unit_brick: self.unit_brick,
             rotated: !self.rotated
         }
+    }
+
+    fn is_rotation_of(&self, other: &Self) -> bool {
+        self.id == other.id && self.unit_brick == other.unit_brick
     }
 }
 
@@ -714,13 +720,13 @@ impl From<LdrawColor> for Srgba<u8> {
 // PUBLIC FUNCTIONS
 // ====================
 
-pub fn write_mosaic<'a, U: UnitBrick>(buffer: &mut impl Write, mosaic: &Mosaic<U, LdrawBrick<U>, LdrawColor>,
-                                      id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str, height_offset: u32) -> std::io::Result<usize> {
+pub fn write_mosaic<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, mosaic: &Mosaic<U, LdrawBrick<I, U>, LdrawColor>,
+                                                    id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str, height_offset: u32) -> std::io::Result<usize> {
     write(buffer, mosaic.iter(), id_fn, mosaic.width(), height_offset)
 }
 
-pub fn write_base<'a, U: UnitBrick>(buffer: &mut impl Write, base: &Base<U, LdrawBrick<U>, LdrawColor>,
-                                    id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str) -> std::io::Result<usize> {
+pub fn write_base<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, base: &Base<U, LdrawBrick<I, U>, LdrawColor>,
+                                                  id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str) -> std::io::Result<usize> {
     write(buffer, base.iter(), id_fn, base.width(), 0)
 }
 
@@ -746,8 +752,8 @@ const ROTATED_TRANSFORM: [[f64; 4]; 4] = [
 // PRIVATE FUNCTIONS
 // ====================
 
-fn write<'a, U: UnitBrick>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<U, LdrawBrick<U>, LdrawColor>>,
-                           mut id_fn: impl FnMut(Brick<U, LdrawBrick<U>>) -> &'a str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
+fn write<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<U, LdrawBrick<I, U>, LdrawColor>>,
+                                         mut id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
     let mut bytes = 0;
 
     for placement in bricks {
