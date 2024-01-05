@@ -11,7 +11,7 @@ impl<I: GenericImageView<Pixel=Rgba<u8>>> Image for I {
         let blue = channels[2];
         let alpha = channels[3];
 
-        RawColor::new(red, green, blue, alpha)
+        RawColor { red, green, blue, alpha }
     }
 
     fn length(&self) -> u32 {

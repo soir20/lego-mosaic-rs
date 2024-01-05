@@ -124,39 +124,10 @@ pub trait Palette<C> {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Srgba<T> {
-    red: T,
-    green: T,
-    blue: T,
-    alpha: T
-}
-
-impl<T> Srgba<T> {
-    pub fn red(&self) -> &T {
-        &self.red
-    }
-
-    pub fn green(&self) -> &T {
-        &self.green
-    }
-
-    pub fn blue(&self) -> &T {
-        &self.blue
-    }
-
-    pub fn alpha(&self) -> &T {
-        &self.alpha
-    }
-}
-
-impl Srgba<u8> {
-    pub const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Srgba<u8> {
-        Srgba {
-            red,
-            green,
-            blue,
-            alpha
-        }
-    }
+    pub red: T,
+    pub green: T,
+    pub blue: T,
+    pub alpha: T
 }
 
 #[non_exhaustive]
@@ -166,33 +137,11 @@ pub enum MosaicError {
 }
 
 pub struct PlacedBrick<U, B, C> {
-    l: u32,
-    w: u32,
-    h: u32,
-    brick: Brick<U, B>,
-    color: C
-}
-
-impl<U: Copy, B: Copy, C: Copy> PlacedBrick<U, B, C> {
-    pub fn l(&self) -> u32 {
-        self.l
-    }
-
-    pub fn w(&self) -> u32 {
-        self.w
-    }
-
-    pub fn h(&self) -> u32 {
-        self.h
-    }
-
-    pub fn brick(&self) -> Brick<U, B> {
-        self.brick
-    }
-
-    pub fn color(&self) -> C {
-        self.color
-    }
+    pub l: u32,
+    pub w: u32,
+    pub h: u32,
+    pub brick: Brick<U, B>,
+    pub color: C
 }
 
 #[derive(Debug)]
@@ -1011,7 +960,7 @@ mod tests {
 
     impl TestColor {
         pub(crate) const fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-            TestColor { value: Srgba::new(red, green, blue, alpha), }
+            TestColor { value: Srgba { red, green, blue, alpha } }
         }
     }
 
@@ -1049,7 +998,7 @@ mod tests {
         fn new(length: u32, width: u32) -> Self {
             TestImage {
                 colors: Pixels {
-                    values_by_row: vec![RawColor::new(0, 0, 0, 0); length as usize * width as usize],
+                    values_by_row: vec![RawColor { red: 0, green: 0, blue: 0, alpha: 0 }; length as usize * width as usize],
                     length: length as usize
                 },
                 length,
@@ -1085,10 +1034,10 @@ mod tests {
     }
 
     fn make_test_img() -> (TestImage, impl Palette<TestColor>) {
-        let color1 = RawColor::new(235, 64, 52, 255);
-        let color2 = RawColor::new(235, 232, 52, 255);
-        let color3 = RawColor::new(52, 235, 55, 255);
-        let color4 = RawColor::new(52, 147, 235, 255);
+        let color1 = RawColor { red: 235, green: 64, blue: 52, alpha: 255 };
+        let color2 = RawColor { red: 235, green: 232, blue: 52, alpha: 255 };
+        let color3 = RawColor { red: 52, green: 235, blue: 55, alpha: 255 };
+        let color4 = RawColor { red: 52, green: 147, blue: 235, alpha: 255 };
         let mut img = TestImage::new(4, 5);
 
         img.put_pixel(0, 0, color1);

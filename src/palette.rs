@@ -93,16 +93,16 @@ struct Lab<C> {
 // ====================
 
 fn to_linear(color: RawColor) -> [f64; 4] {
-    let linear: LinSrgba<f64> = Srgba::new(*color.red(), *color.green(), *color.blue(), *color.alpha()).into_linear();
+    let linear: LinSrgba<f64> = Srgba::new(color.red, color.green, color.blue, color.alpha).into_linear();
     linear.into()
 }
 
 fn to_lab(color: RawColor) -> palette::Lab {
     let linear_color: LinSrgba<f32> = Srgba::new(
-        *color.red(),
-        *color.green(),
-        *color.blue(),
-        *color.alpha()
+        color.red,
+        color.green,
+        color.blue,
+        color.alpha
     ).into_linear();
 
     linear_color.into_color()

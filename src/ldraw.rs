@@ -443,25 +443,31 @@ pub const RUBBER_TRANSLUCENT_COLORS: &[LdrawColor] = &[
 // ====================
 
 pub struct SubPartCommand<'a> {
-    color: u16,
-    x: f64,
-    y: f64,
-    z: f64,
-    a: f64,
-    b: f64,
-    c: f64,
-    d: f64,
-    e: f64,
-    f: f64,
-    g: f64,
-    h: f64,
-    i: f64,
-    file: &'a str
+    pub color: u16,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub d: f64,
+    pub e: f64,
+    pub f: f64,
+    pub g: f64,
+    pub h: f64,
+    pub i: f64,
+    pub file: &'a str
 }
 
 impl SubPartCommand<'_> {
-    pub fn new<I: Copy + Eq, U: UnitBrick>(l: u32, w: u32, h: u32, brick: Brick<U, LdrawBrick<I, U>>, color: LdrawColor,
-                                           file: &str, mosaic_width: u32) -> SubPartCommand {
+    pub fn from_placement<'a, I: Copy + Eq, U: UnitBrick>(placement: &'a PlacedBrick<U, LdrawBrick<I, U>, LdrawColor>,
+                                                          file: &'a str, mosaic_width: u32) -> SubPartCommand<'a> {
+        let l = placement.l;
+        let w = placement.w;
+        let h = placement.h;
+        let brick = placement.brick;
+        let color = placement.color;
+
         let ldraw_horizontal_scale = 20f64;
         let ldraw_vertical_scale = 8f64;
 
@@ -472,7 +478,7 @@ impl SubPartCommand<'_> {
         // Use x=0, y=0, z=0 to rotate about part's origin
         let transform = match brick {
             Brick::Unit(_) => BASE_TRANSFORM,
-            Brick::NonUnit(non_unit) => match non_unit.rotated() {
+            Brick::NonUnit(non_unit) => match non_unit.rotated {
                 true => ROTATED_TRANSFORM,
                 false => BASE_TRANSFORM
             }
@@ -506,58 +512,6 @@ impl SubPartCommand<'_> {
             i,
             file
         }
-    }
-
-    pub fn color(&self) -> u16 {
-        self.color
-    }
-
-    pub fn x(&self) -> f64 {
-        self.x
-    }
-
-    pub fn y(&self) -> f64 {
-        self.y
-    }
-
-    pub fn z(&self) -> f64 {
-        self.z
-    }
-
-    pub fn a(&self) -> f64 {
-        self.a
-    }
-
-    pub fn b(&self) -> f64 {
-        self.b
-    }
-
-    pub fn c(&self) -> f64 {
-        self.c
-    }
-
-    pub fn d(&self) -> f64 {
-        self.d
-    }
-
-    pub fn e(&self) -> f64 {
-        self.e
-    }
-
-    pub fn f(&self) -> f64 {
-        self.f
-    }
-
-    pub fn g(&self) -> f64 {
-        self.g
-    }
-
-    pub fn h(&self) -> f64 {
-        self.h
-    }
-
-    pub fn i(&self) -> f64 {
-        self.i
     }
 }
 
@@ -614,33 +568,12 @@ impl Display for SubPartCommand<'_> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct LdrawBrick<I, U> {
-    id: I,
-    length: u8,
-    width: u8,
-    height: u8,
-    unit_brick: U,
-    rotated: bool
-}
-
-impl<I: Copy + Eq, U: UnitBrick> LdrawBrick<I, U> {
-    pub fn new(id: I, length: u8, width: u8, height: u8, unit_brick: U) -> Self {
-        LdrawBrick {
-            id,
-            length,
-            width,
-            height,
-            unit_brick,
-            rotated: false
-        }
-    }
-
-    pub fn id(&self) -> I {
-        self.id
-    }
-
-    pub fn rotated(&self) -> bool {
-        self.rotated
-    }
+    pub id: I,
+    pub length: u8,
+    pub width: u8,
+    pub height: u8,
+    pub unit_brick: U,
+    pub rotated: bool
 }
 
 impl<I: Copy + Eq, U: UnitBrick> Eq for LdrawBrick<I, U> {}
@@ -688,13 +621,13 @@ impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
 
 #[derive(Copy, Clone, Eq)]
 pub struct LdrawColor {
-    id: u16,
-    value: Srgba<u8>
+    pub id: u16,
+    pub value: Srgba<u8>
 }
 
 impl LdrawColor {
     pub const fn new(id: u16, red: u8, green: u8, blue: u8, alpha: u8) -> Self {
-        LdrawColor { id, value: Srgba::new(red, green, blue, alpha) }
+        LdrawColor { id, value: Srgba { red, green, blue, alpha } }
     }
 }
 
@@ -760,12 +693,15 @@ fn write<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, bricks: impl I
     let mut bytes = 0;
 
     for placement in bricks {
-        let command = SubPartCommand::new(
-            placement.l + l,
-            placement.w + w,
-            placement.h + h,
-            placement.brick,
-            placement.color,
+        let translated_placement = PlacedBrick {
+            l: placement.l + l,
+            w: placement.w + w,
+            h: placement.h + h,
+            brick: placement.brick,
+            color: placement.color,
+        };
+        let command = SubPartCommand::from_placement(
+            &translated_placement,
             id_fn(placement.brick),
             mosaic_width
         );
