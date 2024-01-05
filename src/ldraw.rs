@@ -622,7 +622,7 @@ pub struct LdrawBrick<I, U> {
     rotated: bool
 }
 
-impl<I, U: UnitBrick> LdrawBrick<I, U> {
+impl<I: Copy + Eq, U: UnitBrick> LdrawBrick<I, U> {
     pub fn new(id: I, length: u8, width: u8, height: u8, unit_brick: U) -> Self {
         LdrawBrick {
             id,
@@ -634,8 +634,8 @@ impl<I, U: UnitBrick> LdrawBrick<I, U> {
         }
     }
 
-    pub fn unit_brick(&self) -> U {
-        self.unit_brick
+    pub fn id(&self) -> I {
+        self.id
     }
 
     pub fn rotated(&self) -> bool {
