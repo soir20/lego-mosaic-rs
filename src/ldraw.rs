@@ -721,13 +721,15 @@ impl From<LdrawColor> for Srgba<u8> {
 // ====================
 
 pub fn write_mosaic<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, mosaic: &Mosaic<U, LdrawBrick<I, U>, LdrawColor>,
-                                                    id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str, height_offset: u32) -> std::io::Result<usize> {
-    write(buffer, mosaic.iter(), id_fn, mosaic.width(), height_offset)
+                                                    id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str,
+                                                    l: u32, w: u32, h: u32) -> std::io::Result<usize> {
+    write(buffer, mosaic.iter(), id_fn, mosaic.width(), l, w, h)
 }
 
 pub fn write_base<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, base: &Base<U, LdrawBrick<I, U>, LdrawColor>,
-                                                  id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str) -> std::io::Result<usize> {
-    write(buffer, base.iter(), id_fn, base.width(), 0)
+                                                  id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>,) -> &'a str,
+                                                  l: u32, w: u32, h: u32) -> std::io::Result<usize> {
+    write(buffer, base.iter(), id_fn, base.width(), l, w, h)
 }
 
 // ====================
@@ -753,14 +755,15 @@ const ROTATED_TRANSFORM: [[f64; 4]; 4] = [
 // ====================
 
 fn write<'a, I: Copy + Eq, U: UnitBrick>(buffer: &mut impl Write, bricks: impl Iterator<Item=PlacedBrick<U, LdrawBrick<I, U>, LdrawColor>>,
-                                         mut id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str, mosaic_width: u32, height_offset: u32) -> std::io::Result<usize> {
+                                         mut id_fn: impl FnMut(Brick<U, LdrawBrick<I, U>>) -> &'a str, mosaic_width: u32,
+                                         l: u32, w: u32, h: u32) -> std::io::Result<usize> {
     let mut bytes = 0;
 
     for placement in bricks {
         let command = SubPartCommand::new(
-            placement.l,
-            placement.w,
-            placement.h + height_offset,
+            placement.l + l,
+            placement.w + w,
+            placement.h + h,
             placement.brick,
             placement.color,
             id_fn(placement.brick),
