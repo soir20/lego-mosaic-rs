@@ -151,7 +151,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Base<U, B, C> {
         2
     }
 
-    fn build_supports(base_bricks: &Vec<FilledArea<U, B>>, one_by_one: U, two_by_one: B, two_by_two: B,
+    fn build_supports(base_bricks: &[FilledArea<U, B>], one_by_one: U, two_by_one: B, two_by_two: B,
                       other_bricks: &[Brick<U, B>], mosaic_length: u32, mosaic_width: u32) -> Vec<FilledArea<U, B>> {
         let mut bricks = vec![
             Brick::Unit(one_by_one),
@@ -163,7 +163,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Base<U, B, C> {
 
         // Return the same single brick used for 2x2 and smaller bases
         if mosaic_length < 3 && mosaic_width < 3 {
-            return base_bricks.clone();
+            return base_bricks.to_owned();
         } else if mosaic_length == 3 && mosaic_width == 2 {
             return vec![
                 FilledArea {
@@ -205,7 +205,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Base<U, B, C> {
             .collect()
     }
 
-    fn layer_iter<'a>(&'a self, bricks: &'a Vec<FilledArea<U, B>>, h: u32) -> impl Iterator<Item=PlacedBrick<U, B, C>> + '_ {
+    fn layer_iter<'a>(&'a self, bricks: &'a [FilledArea<U, B>], h: u32) -> impl Iterator<Item=PlacedBrick<U, B, C>> + '_ {
         bricks.iter().flat_map(move |area|
             (area.l..(area.l + area.length)).step_by(area.brick.length() as usize).flat_map(move |l|
                 (area.w..(area.w + area.width)).step_by(area.brick.width() as usize).map(move |w| PlacedBrick {
@@ -220,6 +220,12 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Base<U, B, C> {
     }
 
 }
+
+// ====================
+// PRIVATE TYPE ALIASES
+// ====================
+
+type BrickVec<U, B> = Vec<Brick<U, B>>;
 
 // ====================
 // PRIVATE FUNCTIONS
@@ -237,7 +243,7 @@ fn sub_at_most(n: u32, amount: u32) -> u32 {
     n - n.min(amount)
 }
 
-fn sort_by_area<U: UnitBrick, B: NonUnitBrick<U>>(bricks: &mut Vec<Brick<U, B>>) {
+fn sort_by_area<U: UnitBrick, B: NonUnitBrick<U>>(bricks: &mut [Brick<U, B>]) {
     bricks.sort_by(|brick1, brick2| {
         let area1= brick1.length() as u16 * brick1.width() as u16;
         let area2 = brick2.length() as u16 * brick2.width() as u16;
@@ -405,7 +411,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> FilledArea<U, B> {
         let needs_right_border = is_even(mosaic_length) && is_rightmost_area;
         let needs_bottom_border = is_even(mosaic_width) && is_bottommost_area;
 
-        let mut border_bricks: Vec<Brick<U, B>> = bricks.iter()
+        let mut border_bricks: BrickVec<U, B> = bricks.iter()
             .filter(|brick| brick.length() == 1 || brick.width() == 1)
             .flat_map(|&brick| iter::once(brick).chain(iter::once(brick.rotate_90())))
             .collect();
@@ -493,7 +499,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> FilledArea<U, B> {
         supports
     }
 
-    fn filter_bricks(bricks: &[Brick<U, B>]) -> (Vec<Brick<U, B>>, Vec<Brick<U, B>>) {
+    fn filter_bricks(bricks: &[Brick<U, B>]) -> (BrickVec<U, B>, BrickVec<U, B>) {
         let mut length_two_bricks = Vec::new();
         let mut width_two_bricks = Vec::new();
 

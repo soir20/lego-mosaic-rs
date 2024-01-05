@@ -304,7 +304,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
                 h,
                 chunks.into_iter().map(|chunk| {
                     if bricks_by_type.contains_key(&chunk.unit_brick) {
-                        let bricks_by_height = bricks_by_type[&chunk.unit_brick].iter()
+                        let bricks_by_height: Vec<VolumeSortedBrick<U, B>> = bricks_by_type[&chunk.unit_brick].iter()
                             .filter(|brick| {
                                 if let Brick::NonUnit(non_unit) = brick.brick {
                                     !exclusions.iter().any(|exclusion| chunk.color == exclusion.1 && exclusion.0.is_rotation_of(&non_unit))
@@ -489,6 +489,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
         Ok(chunks)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn slice_chunk(coords_in_chunk: BTreeMap<u8, BTreeSet<(u8, u8)>>,
                    unit_brick: U, color: C, min_l: u8, max_l: u8,
                    min_w: u8, max_w: u8, min_h: u8) -> Vec<Chunk<U, B, C>> {
@@ -583,6 +584,7 @@ fn was_visited(visited: &BoolVec, l: u8, w: u8, h: u8, length: u8, width: u8) ->
     visited.get(visited_index(l, w, h, length, width)).unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn is_new_pos<U: UnitBrick, C: Color>(visited: &BoolVec,
                                       mut brick_fn: impl FnMut(u8, u8, u8, C) -> U,
                                       color_fn: impl Fn(u8, u8) -> C,
@@ -672,7 +674,7 @@ struct Chunk<U, B, C> {
 
 impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Chunk<U, B, C> {
 
-    fn reduce_bricks(self, sizes: &Vec<VolumeSortedBrick<U, B>>) -> Self {
+    fn reduce_bricks(self, sizes: &[VolumeSortedBrick<U, B>]) -> Self {
         let mut ws_included_by_h: Vec<_> = (0..self.height)
             .map(|_| self.ws_included.clone())
             .collect();
