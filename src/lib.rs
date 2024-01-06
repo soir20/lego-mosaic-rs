@@ -63,6 +63,36 @@ pub trait NonUnitBrick<U>: Copy + Eq {
     fn is_rotation_of(&self, other: &Self) -> bool;
 }
 
+pub trait Image {
+    fn pixel(&self, l: u32, w: u32) -> RawColor;
+
+    fn length(&self) -> u32;
+
+    fn width(&self) -> u32;
+}
+
+pub trait Palette<C> {
+    fn nearest(&self, color: RawColor) -> Option<C>;
+}
+
+// ====================
+// PUBLIC STRUCTS
+// ====================
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Srgba<T> {
+    pub red: T,
+    pub green: T,
+    pub blue: T,
+    pub alpha: T
+}
+
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum MosaicError {
+    PointerTooSmall
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Brick<U, B> {
     Unit(U),
@@ -104,36 +134,6 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> Brick<U, B> {
             Brick::NonUnit(brick) => Brick::NonUnit(brick.rotate_90())
         }
     }
-}
-
-pub trait Image {
-    fn pixel(&self, l: u32, w: u32) -> RawColor;
-
-    fn length(&self) -> u32;
-
-    fn width(&self) -> u32;
-}
-
-pub trait Palette<C> {
-    fn nearest(&self, color: RawColor) -> Option<C>;
-}
-
-// ====================
-// PUBLIC STRUCTS
-// ====================
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct Srgba<T> {
-    pub red: T,
-    pub green: T,
-    pub blue: T,
-    pub alpha: T
-}
-
-#[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
-pub enum MosaicError {
-    PointerTooSmall
 }
 
 pub struct PlacedBrick<U, B, C> {
