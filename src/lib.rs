@@ -79,7 +79,7 @@ pub trait Palette<C> {
 // PUBLIC STRUCTS
 // ====================
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Srgba<T> {
     pub red: T,
     pub green: T,
@@ -88,12 +88,12 @@ pub struct Srgba<T> {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum MosaicError {
     PointerTooSmall
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum Brick<U, B> {
     Unit(U),
     NonUnit(B)
@@ -136,6 +136,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> Brick<U, B> {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct PlacedBrick<U, B, C> {
     pub l: u32,
     pub w: u32,
@@ -144,7 +145,7 @@ pub struct PlacedBrick<U, B, C> {
     pub color: C
 }
 
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Mosaic<U, B, C> {
     sections: Vec<Section<U, B, C>>,
     length: u32,
@@ -599,7 +600,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> Ord for VolumeSortedBrick<U, B> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 struct ChunkPlacedBrick<U, B> {
     l: u8,
     w: u8,
@@ -607,7 +608,7 @@ struct ChunkPlacedBrick<U, B> {
     brick: Brick<U, B>
 }
 
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 struct Chunk<U, B, C> {
     unit_brick: U,
     color: C,

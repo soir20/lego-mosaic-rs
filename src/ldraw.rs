@@ -442,6 +442,7 @@ pub const RUBBER_TRANSLUCENT_COLORS: &[LdrawColor] = &[
 // PUBLIC STRUCTS
 // ====================
 
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct SubPartCommand<'a> {
     pub color: u16,
     pub x: f64,
@@ -566,7 +567,7 @@ impl Display for SubPartCommand<'_> {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Hash, Debug)]
 pub struct LdrawBrick<I, U> {
     pub id: I,
     pub length: u8,
@@ -619,7 +620,7 @@ impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
     }
 }
 
-#[derive(Copy, Clone, Eq)]
+#[derive(Copy, Clone, Eq, Hash, Debug)]
 pub struct LdrawColor {
     pub id: u16,
     pub value: Srgba<u8>

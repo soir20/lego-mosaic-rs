@@ -7,13 +7,13 @@ use crate::BaseError::{NotATwoByOnePlate, NotATwoByTwoPlate};
 // ====================
 
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum BaseError<B> {
     NotATwoByOnePlate(B),
     NotATwoByTwoPlate(B)
 }
 
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Base<U, B, C> {
     base_bricks: Vec<FilledArea<U, B>>,
     support_bricks: Vec<FilledArea<U, B>>,
@@ -320,7 +320,7 @@ fn fill<U: UnitBrick, B: NonUnitBrick<U>>(min_l: u32, min_w: u32, length: u32, w
 // PRIVATE STRUCTS
 // ====================
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 struct FilledArea<U, B> {
     brick: Brick<U, B>,
     l: u32,

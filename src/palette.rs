@@ -7,6 +7,7 @@ use crate::{Color, Palette, RawColor};
 // PUBLIC STRUCTS
 // ====================
 
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct EuclideanDistancePalette<C: Color> {
     tree: KdTree<EuclideanDistanceKdPoint<C>>
 }
@@ -29,6 +30,7 @@ impl<C: Color> Palette<C> for EuclideanDistancePalette<C> {
     }
 }
 
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct HyAbPalette<C> {
     palette: Vec<Lab<C>>
 }
@@ -47,6 +49,7 @@ impl<C: Color> Palette<C> for HyAbPalette<C> {
     }
 }
 
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct Ciede2000Palette<C> {
     palette: Vec<Lab<C>>
 }
@@ -69,6 +72,7 @@ impl<C: Color> Palette<C> for Ciede2000Palette<C> {
 // PRIVATE STRUCTS
 // ====================
 
+#[derive(Clone, PartialEq, Debug, Default)]
 struct EuclideanDistanceKdPoint<C>(C, [f64; 4]);
 
 impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
@@ -82,6 +86,7 @@ impl<C: Color> KdPoint for EuclideanDistanceKdPoint<C> {
     }
 }
 
+#[derive(Clone, PartialEq, Debug, Default)]
 struct Lab<C> {
     original: C,
     linear_alpha: f32,
