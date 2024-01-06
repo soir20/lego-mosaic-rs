@@ -56,7 +56,7 @@ pub trait NonUnitBrick<U>: Copy + Eq {
 
     fn height(&self) -> u8;
 
-    fn unit_brick(&self) -> &U;
+    fn unit_brick(&self) -> U;
 
     fn rotate_90(&self) -> Self;
 
@@ -91,9 +91,9 @@ impl<U: UnitBrick, B: NonUnitBrick<U>> Brick<U, B> {
         }
     }
 
-    pub fn unit_brick(&self) -> &U {
+    pub fn unit_brick(&self) -> U {
         match self {
-            Brick::Unit(brick) => brick,
+            Brick::Unit(brick) => *brick,
             Brick::NonUnit(brick) => brick.unit_brick()
         }
     }
@@ -222,7 +222,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
             .fold(BTreeMap::new(), |mut partitions, &brick| {
 
                 // Consider each brick's associated unit brick as its type
-                let unit_brick = *brick.unit_brick();
+                let unit_brick = brick.unit_brick();
                 let entry = partitions.entry(unit_brick).or_insert_with(Vec::new);
                 entry.push(VolumeSortedBrick { brick: Brick::NonUnit(brick) });
 
@@ -803,8 +803,8 @@ mod tests {
             self.height
         }
 
-        fn unit_brick(&self) -> &u8 {
-            &self.unit_brick
+        fn unit_brick(&self) -> u8 {
+            self.unit_brick
         }
 
         fn rotate_90(&self) -> Self {

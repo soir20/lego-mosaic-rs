@@ -599,8 +599,8 @@ impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
         self.height
     }
 
-    fn unit_brick(&self) -> &U {
-        &self.unit_brick
+    fn unit_brick(&self) -> U {
+        self.unit_brick
     }
 
     fn rotate_90(&self) -> Self {
