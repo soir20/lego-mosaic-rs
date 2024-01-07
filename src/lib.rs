@@ -1294,4 +1294,19 @@ mod tests {
         assert_eq!(4 * 5, total_bricks);
         assert_eq!(total_bricks, mosaic.iter().fold(0, |total, _| total + 1));
     }
+
+    #[test]
+    fn test_reduce_empty_mosaic() {
+        let (_, palette) = make_test_img();
+
+        let mosaic: Mosaic<u8, TestBrick, TestColor> = Mosaic::from_image(
+            &TestImage::new(0, 0),
+            &palette,
+            |_, _, _| 1,
+            |_, _, _, _| UNIT_BRICK
+        ).unwrap().reduce_bricks(&[ONE_BY_TWO_PLATE], &[]).unwrap();
+
+        assert_eq!(0, mosaic.sections.len());
+        assert_eq!(0, mosaic.iter().fold(0, |total, _| total + 1));
+    }
 }
