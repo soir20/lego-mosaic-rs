@@ -776,6 +776,7 @@ impl Pixels<RawColor> {
     }
 }
 
+//noinspection DuplicatedCode
 #[cfg(all(test, feature = "default"))]
 mod tests {
     use crate::palette::EuclideanDistancePalette;
@@ -1308,5 +1309,111 @@ mod tests {
 
         assert_eq!(0, mosaic.sections.len());
         assert_eq!(0, mosaic.iter().fold(0, |total, _| total + 1));
+    }
+
+    #[test]
+    fn test_reduce_no_bricks_given() {
+        let (img, palette) = make_test_img();
+
+        let heights = [
+            [5, 2, 1, 1],
+            [5, 5, 2, 2],
+            [1, 0, 3, 2],
+            [4, 3, 1, 2],
+            [3, 1, 1, 4]
+        ];
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap().reduce_bricks(&[], &[]).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, &chunk);
+
+                if chunk.w % 2 == 0 {
+                    total_bricks_even += chunk.bricks.len();
+                } else {
+                    total_bricks_odd += chunk.bricks.len();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even as usize, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd as usize, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, _| total + 1));
+    }
+
+    #[test]
+    fn test_reduce_all_bricks_excluded() {
+        let (img, palette) = make_test_img();
+
+        let heights = [
+            [5, 2, 1, 1],
+            [5, 5, 2, 2],
+            [1, 0, 3, 2],
+            [4, 3, 1, 2],
+            [3, 1, 1, 4]
+        ];
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap().reduce_bricks(&[], &[]).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, &chunk);
+
+                if chunk.w % 2 == 0 {
+                    total_bricks_even += chunk.bricks.len();
+                } else {
+                    total_bricks_odd += chunk.bricks.len();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even as usize, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd as usize, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, _| total + 1));
     }
 }
