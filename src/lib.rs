@@ -342,7 +342,7 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
                     mut height_fn: impl FnMut(u8, u8) -> u8,
                     mut brick_fn: impl FnMut(u8, u8, u8, C) -> U,
                     color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<U, B, C>>, MosaicError> {
-        if usize::MAX / length as usize / width as usize / max_height as usize == 0 {
+        if max_height > 0 && usize::MAX / length as usize / width as usize / max_height as usize == 0 {
             return Err(MosaicError::PointerTooSmall);
         }
 
@@ -783,6 +783,8 @@ impl Pixels<RawColor> {
 //noinspection DuplicatedCode
 #[cfg(all(test, feature = "default"))]
 mod tests {
+    use rand::prelude::*;
+    use rand_chacha::ChaCha8Rng;
     use crate::palette::EuclideanDistancePalette;
     use super::*;
 
@@ -1096,19 +1098,19 @@ mod tests {
         brick.length() as u32 * brick.width() as u32 * brick.height() as u32
     }
 
-    fn assert_colors_match_img(img: &TestImage, chunk: &Chunk<u8, TestBrick, TestColor>) {
+    fn assert_colors_match_img(img: &TestImage, section_l: u32, section_w: u32, chunk: &Chunk<u8, TestBrick, TestColor>) {
         for l in 0..chunk.length {
             for &w in &chunk.ws_included[l as usize] {
-                assert_eq!(img.pixel((l + chunk.l) as u32, (w + chunk.w) as u32), chunk.color.value);
+                assert_eq!(img.pixel((l + chunk.l) as u32 + section_l, (w + chunk.w) as u32 + section_w), chunk.color.value);
             }
         }
     }
 
     fn make_test_img() -> (TestImage, impl Palette<TestColor>) {
-        let color1 = RawColor { red: 235, green: 64, blue: 52, alpha: 255 };
-        let color2 = RawColor { red: 235, green: 232, blue: 52, alpha: 255 };
-        let color3 = RawColor { red: 52, green: 235, blue: 55, alpha: 255 };
-        let color4 = RawColor { red: 52, green: 147, blue: 235, alpha: 255 };
+        let color1 = COLOR_1.value;
+        let color2 = COLOR_2.value;
+        let color3 = COLOR_3.value;
+        let color4 = COLOR_4.value;
         let mut img = TestImage::new(4, 5);
 
         img.put_pixel(0, 0, color1);
@@ -1199,7 +1201,7 @@ mod tests {
             assert_eq!(5, chunks.len());
             for chunk in chunks {
                 assert_eq!(1, chunk.height);
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
                 total_bricks += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
 
                 chunk.bricks.iter().for_each(|brick| {
@@ -1231,7 +1233,7 @@ mod tests {
             assert_eq!(5, chunks.len());
             for chunk in chunks {
                 assert_eq!(2, chunk.height);
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
                 total_bricks += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
 
                 chunk.bricks.iter().for_each(|brick| {
@@ -1271,7 +1273,7 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
                 total_bricks += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
             }
         }
@@ -1318,9 +1320,239 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
+    fn test_mosaic_exactly_matches_section_length_width() {
+        let (_, palette) = make_test_img();
+        let size = u8::MAX as u32 - 1;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(1705276380);
+        let mut img = TestImage::new(size, size);
+        for x in 0..size {
+            for y in 0..size {
+                let color = match rng.gen_range(0..4) {
+                    0 => COLOR_1,
+                    1 => COLOR_2,
+                    2 => COLOR_3,
+                    _ => COLOR_4
+                };
+                img.put_pixel(x, y, color.value);
+            }
+        }
+
+        let heights: Vec<Vec<u32>> = (0..size).into_iter().map(
+            |_| (0..size).into_iter().map(|_| rng.gen_range(0..6)).collect()
+        ).collect();
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
+    fn test_mosaic_greater_than_section_length_width() {
+        let (_, palette) = make_test_img();
+        let size = 300;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(1705276380);
+        let mut img = TestImage::new(size, size);
+        for x in 0..size {
+            for y in 0..size {
+                let color = match rng.gen_range(0..4) {
+                    0 => COLOR_1,
+                    1 => COLOR_2,
+                    2 => COLOR_3,
+                    _ => COLOR_4
+                };
+                img.put_pixel(x, y, color.value);
+            }
+        }
+
+        let heights: Vec<Vec<u32>> = (0..size).into_iter().map(
+            |_| (0..size).into_iter().map(|_| rng.gen_range(0..6)).collect()
+        ).collect();
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert!(*l == 0 || *l == 255);
+            assert!(*w == 0 || *w == 255);
+            assert_eq!(*h, 0);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
+    fn test_mosaic_exactly_matches_section_height() {
+        let (img, palette) = make_test_img();
+        let size = u8::MAX as u32 - 1;
+        let mut rng = ChaCha8Rng::seed_from_u64(1705276380);
+
+        let heights: Vec<Vec<u32>> = (0..img.width).into_iter().map(
+            |_| (0..img.length).into_iter().map(|_| rng.gen_range((size - 6)..size)).collect()
+        ).collect();
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
+    fn test_mosaic_greater_than_section_height() {
+        let (img, palette) = make_test_img();
+        let size = 300;
+        let mut rng = ChaCha8Rng::seed_from_u64(1705276380);
+
+        let heights: Vec<Vec<u32>> = (0..img.width).into_iter().map(
+            |_| (0..img.length).into_iter().map(|_| rng.gen_range((size - 6)..size)).collect()
+        ).collect();
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(*l, 0);
+            assert_eq!(*w, 0);
+            assert!(*h == 0 || *h == 255);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1419,9 +1651,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1480,9 +1712,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1534,9 +1766,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1587,9 +1819,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1646,9 +1878,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1702,7 +1934,7 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
                 if chunk.l % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1763,9 +1995,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1824,9 +2056,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1884,9 +2116,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -1944,9 +2176,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -2004,9 +2236,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -2059,9 +2291,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -2113,9 +2345,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
@@ -2167,9 +2399,9 @@ mod tests {
             assert_eq!(0, *w);
             assert_eq!(0, *h);
             for chunk in chunks {
-                assert_colors_match_img(&img, &chunk);
+                assert_colors_match_img(&img, *l, *w, &chunk);
 
-                if chunk.w % 2 == 0 {
+                if (*w + chunk.w as u32) % 2 == 0 {
                     total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
                 } else {
                     total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
