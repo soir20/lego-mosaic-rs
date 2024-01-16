@@ -155,8 +155,8 @@ pub struct Mosaic<U, B, C> {
 impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
     pub fn from_image<I: Image>(image: &I,
                                 palette: &impl Palette<C>,
-                                mut height_fn: impl Fn(u32, u32, C) -> u32,
-                                mut brick_fn: impl Fn(u32, u32, u32, C) -> U) -> Result<Self, MosaicError> {
+                                height_fn: impl Fn(u32, u32, C) -> u32,
+                                brick_fn: impl Fn(u32, u32, u32, C) -> U) -> Result<Self, MosaicError> {
         let section_size = u8::MAX as u32;
         let section_images = Mosaic::<U, B, C>::make_sections::<I>(image, section_size);
         let mut sections = Vec::with_capacity(section_images.len());
@@ -337,8 +337,8 @@ impl<U: UnitBrick, B: NonUnitBrick<U>, C: Color> Mosaic<U, B, C> {
     fn build_chunks(length: u8,
                     width: u8,
                     max_height: u8,
-                    mut height_fn: impl Fn(u8, u8) -> u8,
-                    mut brick_fn: impl Fn(u8, u8, u8, C) -> U,
+                    height_fn: impl Fn(u8, u8) -> u8,
+                    brick_fn: impl Fn(u8, u8, u8, C) -> U,
                     color_fn: impl Fn(u8, u8) -> C) -> Result<Vec<Chunk<U, B, C>>, MosaicError> {
         if max_height > 0 && usize::MAX / length as usize / width as usize / max_height as usize == 0 {
             return Err(MosaicError::PointerTooSmall);
@@ -746,7 +746,7 @@ struct Pixels<T> {
 }
 
 impl<T: Copy> Pixels<T> {
-    fn from_fn(mut f: impl Fn(usize, usize) -> T, length: usize, width: usize) -> Self {
+    fn from_fn(f: impl Fn(usize, usize) -> T, length: usize, width: usize) -> Self {
         let mut values_by_row = Vec::new();
 
         for w in 0..width {
