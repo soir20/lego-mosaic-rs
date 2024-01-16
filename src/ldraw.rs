@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::io::Write;
-use crate::{Brick, Mosaic, NonUnitBrick, PlacedBrick, Srgba, UnitBrick};
+use crate::{Brick, Mosaic, NonUnitBrick, PlacedBrick, RawColor, Srgba, UnitBrick};
 use crate::base::Base;
 
 // ====================
@@ -623,7 +623,7 @@ impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
 #[derive(Copy, Clone, Eq, Hash, Debug)]
 pub struct LdrawColor {
     pub id: u16,
-    pub value: Srgba<u8>
+    pub value: RawColor
 }
 
 impl LdrawColor {
@@ -644,7 +644,7 @@ impl PartialEq<Self> for LdrawColor {
     }
 }
 
-impl From<LdrawColor> for Srgba<u8> {
+impl From<LdrawColor> for RawColor {
     fn from(color: LdrawColor) -> Self {
         color.value
     }

@@ -1017,7 +1017,7 @@ mod tests {
 
     #[derive(Copy, Clone, Debug, Eq)]
     pub(crate) struct TestColor {
-        value: Srgba<u8>
+        value: RawColor
     }
 
     impl TestColor {
@@ -1038,7 +1038,7 @@ mod tests {
         }
     }
 
-    impl From<TestColor> for Srgba<u8> {
+    impl From<TestColor> for RawColor {
         fn from(color: TestColor) -> Self {
             color.value
         }
