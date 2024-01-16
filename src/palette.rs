@@ -145,3 +145,213 @@ fn lab_nearest<C: Color>(palette: &[Lab<C>], color: RawColor, diff_fn: impl Fn(p
         .0
         .map(|color| color.original)
 }
+
+//noinspection DuplicatedCode
+#[cfg(test)]
+mod tests {
+    use crate::{Palette, RawColor};
+    use crate::palette::{Ciede2000Palette, EuclideanDistancePalette, HyAbPalette};
+    use crate::tests::TestColor;
+
+    #[test]
+    fn test_empty_euclidean() {
+        let palette: EuclideanDistancePalette<TestColor> = EuclideanDistancePalette::new(&[]);
+        let nearest = palette.nearest(RawColor { red: 2, green: 86, blue: 105, alpha: 203 });
+        assert!(nearest.is_none());
+    }
+
+    #[test]
+    fn test_euclidean_finds_red() {
+        let palette = EuclideanDistancePalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 0, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(128, 127, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_euclidean_finds_green() {
+        let palette = EuclideanDistancePalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 255, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 128, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_euclidean_finds_blue() {
+        let palette = EuclideanDistancePalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 255, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 128, 127), nearest);
+    }
+
+    #[test]
+    fn test_euclidean_finds_alpha() {
+        let palette = EuclideanDistancePalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 0, alpha: 255 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 127, 128), nearest);
+    }
+
+    #[test]
+    fn test_euclidean_finds_one_when_equidistant() {
+        let palette = EuclideanDistancePalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 255, blue: 255, alpha: 255 });
+        assert!(nearest.is_some());
+    }
+
+    #[test]
+    fn test_empty_hyab() {
+        let palette: HyAbPalette<TestColor> = HyAbPalette::new(&[]);
+        let nearest = palette.nearest(RawColor { red: 2, green: 86, blue: 105, alpha: 203 });
+        assert!(nearest.is_none());
+    }
+
+    #[test]
+    fn test_hyab_finds_red() {
+        let palette = HyAbPalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 0, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(128, 127, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_hyab_finds_green() {
+        let palette = HyAbPalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 255, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 128, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_hyab_finds_blue() {
+        let palette = HyAbPalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 255, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 128, 127), nearest);
+    }
+
+    #[test]
+    fn test_hyab_finds_alpha() {
+        let palette = HyAbPalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 0, alpha: 255 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 127, 128), nearest);
+    }
+
+    #[test]
+    fn test_hyab_finds_one_when_equidistant() {
+        let palette = HyAbPalette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 255, blue: 255, alpha: 255 });
+        assert!(nearest.is_some());
+    }
+
+    #[test]
+    fn test_empty_ciede() {
+        let palette: Ciede2000Palette<TestColor> = Ciede2000Palette::new(&[]);
+        let nearest = palette.nearest(RawColor { red: 2, green: 86, blue: 105, alpha: 203 });
+        assert!(nearest.is_none());
+    }
+
+    #[test]
+    fn test_ciede_finds_red() {
+        let palette = Ciede2000Palette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 0, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(128, 127, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_ciede_finds_green() {
+        let palette = Ciede2000Palette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 255, blue: 0, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 128, 127, 127), nearest);
+    }
+
+    #[test]
+    fn test_ciede_finds_blue() {
+        let palette = Ciede2000Palette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 255, alpha: 0 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 128, 127), nearest);
+    }
+
+    #[test]
+    fn test_ciede_finds_alpha() {
+        let palette = Ciede2000Palette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 0, green: 0, blue: 0, alpha: 255 }).unwrap();
+        assert_eq!(TestColor::new(127, 127, 127, 128), nearest);
+    }
+
+    #[test]
+    fn test_ciede_finds_one_when_equidistant() {
+        let palette = Ciede2000Palette::new(&[
+            TestColor::new(128, 127, 127, 127),
+            TestColor::new(127, 128, 127, 127),
+            TestColor::new(127, 127, 128, 127),
+            TestColor::new(127, 127, 127, 128)
+        ]);
+        let nearest = palette.nearest(RawColor { red: 255, green: 255, blue: 255, alpha: 255 });
+        assert!(nearest.is_some());
+    }
+
+}
