@@ -1335,6 +1335,123 @@ mod tests {
     }
 
     #[test]
+    fn test_mosaic_height_function_returns_diff_value_each_call() {
+        let (img, palette) = make_test_img();
+
+        let heights = [
+            [5, 2, 1, 1],
+            [5, 5, 2, 2],
+            [1, 0, 3, 2],
+            [4, 3, 1, 2],
+            [3, 1, 1, 4]
+        ];
+        let mut calls = [[0; 4]; 5];
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| {
+                let height = heights[w as usize][l as usize] + calls[w as usize][l as usize];
+                calls[w as usize][l as usize] += 1;
+                height
+            },
+            |_, w, _, _| match w % 2 == 0 {
+                true => UNIT_BRICK_2,
+                false => UNIT_BRICK
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
+    fn test_mosaic_brick_function_returns_diff_value_each_call() {
+        let (img, palette) = make_test_img();
+
+        let heights = [
+            [5, 2, 1, 1],
+            [5, 5, 2, 2],
+            [1, 0, 3, 2],
+            [4, 3, 1, 2],
+            [3, 1, 1, 4]
+        ];
+        let mut calls = [[[0; 4]; 5]; 6];
+        let expected_total_bricks_even: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 0)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+        let expected_total_bricks_odd: u32 = heights.iter().enumerate()
+            .filter(|(index, _)| index % 2 == 1)
+            .map(|(_, row)| row)
+            .map(|row| row.iter().sum::<u32>())
+            .sum::<u32>();
+
+        let mosaic = Mosaic::from_image(
+            &img,
+            &palette,
+            |l, w, _| heights[w as usize][l as usize],
+            |l, w, h, _| {
+                let brick = match w % 2 == 0 {
+                    true => UNIT_BRICK_2,
+                    false => UNIT_BRICK
+                };
+                let cur_calls = calls[h as usize][w as usize][l as usize];
+                calls[h as usize][w as usize][l as usize] += 1;
+                brick + cur_calls
+            }
+        ).unwrap();
+
+        let mut total_bricks_even = 0;
+        let mut total_bricks_odd = 0;
+        for (l, w, h, chunks) in &mosaic.sections {
+            assert_eq!(0, *l);
+            assert_eq!(0, *w);
+            assert_eq!(0, *h);
+            for chunk in chunks {
+                assert_colors_match_img(&img, *l, *w, &chunk);
+
+                if (*w + chunk.w as u32) % 2 == 0 {
+                    total_bricks_even += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                } else {
+                    total_bricks_odd += chunk.bricks.iter().map(|brick| volume(brick.brick)).sum::<u32>();
+                }
+            }
+        }
+        assert_eq!(expected_total_bricks_even, total_bricks_even);
+        assert_eq!(expected_total_bricks_odd, total_bricks_odd);
+        assert_eq!(total_bricks_even + total_bricks_odd, mosaic.iter().fold(0, |total, brick| total + volume(brick.brick)));
+    }
+
+    #[test]
     fn test_mosaic_exactly_matches_section_length_width() {
         let (_, palette) = make_test_img();
         let size = u8::MAX as u32 - 1;
