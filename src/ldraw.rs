@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use crate::{Brick, Mosaic, NonUnitBrick, PlacedBrick, RawColor, Srgba, UnitBrick};
 use crate::base::Base;
@@ -567,7 +568,7 @@ impl Display for SubPartCommand<'_> {
     }
 }
 
-#[derive(Copy, Clone, Hash, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct LdrawBrick<I, U> {
     pub id: I,
     pub length: u8,
@@ -584,6 +585,14 @@ impl<I: Copy + Eq, U: UnitBrick> PartialEq<Self> for LdrawBrick<I, U> {
         self.id == other.id
             && self.unit_brick == other.unit_brick
             && self.rotated == other.rotated
+    }
+}
+
+impl<I: Copy + Eq + Hash, U: UnitBrick + Hash> Hash for LdrawBrick<I, U> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.unit_brick.hash(state);
+        self.rotated.hash(state);
     }
 }
 
@@ -620,7 +629,7 @@ impl<I: Copy + Eq, U: UnitBrick> NonUnitBrick<U> for LdrawBrick<I, U> {
     }
 }
 
-#[derive(Copy, Clone, Eq, Hash, Debug)]
+#[derive(Copy, Clone, Eq, Debug)]
 pub struct LdrawColor {
     pub id: u16,
     pub value: RawColor
@@ -641,6 +650,12 @@ impl Default for LdrawColor {
 impl PartialEq<Self> for LdrawColor {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Hash for LdrawColor {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u16(self.id);
     }
 }
 
