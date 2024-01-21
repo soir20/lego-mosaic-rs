@@ -17,7 +17,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 
 [features]
-default = ["palette"]
+default = ["palette", "image", "ldraw"]
 palette = ["dep:kd-tree", "dep:typenum", "dep:palette"]
 image = ["dep:image"]
 ldraw = []
