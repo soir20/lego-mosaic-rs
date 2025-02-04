@@ -89,6 +89,7 @@ pub const SAND_PURPLE: LdrawColor = LdrawColor::new(373, 117, 101, 125, 255);
 pub const SAND_GREEN: LdrawColor = LdrawColor::new(378, 112, 142, 124, 255);
 pub const SAND_BLUE: LdrawColor = LdrawColor::new(379, 112, 129, 154, 255);
 pub const REDDISH_ORANGE: LdrawColor = LdrawColor::new(402, 202, 76, 11, 255);
+pub const SIENNA_BROWN: LdrawColor = LdrawColor::new(422, 145, 92, 60, 255);
 pub const FABULAND_BROWN: LdrawColor = LdrawColor::new(450, 210, 119, 68, 255);
 pub const MEDIUM_ORANGE: LdrawColor = LdrawColor::new(462, 245, 134, 36, 255);
 pub const DARK_ORANGE: LdrawColor = LdrawColor::new(484, 145, 80, 28, 255);
